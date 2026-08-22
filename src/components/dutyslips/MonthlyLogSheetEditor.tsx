@@ -294,6 +294,13 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         row.endKm = (row.startKm || 0) + kmVal;
       }
 
+      if (field === 'totalHours') {
+        const hrs = Number(val) || 0;
+        row.totalHours = hrs;
+        row.extraHours = Math.max(0, hrs - defaultDutyHours);
+        row.overtimeCharges = row.extraHours * overtimeRatePerHour;
+      }
+
       // Re-calculate day total (Overtime automatically included!)
       row.dayTotalAmount = row.isOffDay ? 0 : computeRowTotal(
         row.totalKm,
@@ -871,20 +878,24 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       />
                     </td>
 
-                    {/* Total Hours with OT Badge if overtime */}
-                    <td className="py-1.5 px-1 text-center border-r border-slate-200 text-[11px]">
-                      {isOff ? (
-                        '-'
-                      ) : (
-                        <div>
-                          <span className="font-semibold text-slate-800">{row.totalHours}h</span>
-                          {hasOt && (
-                            <span className="block text-[9px] font-bold text-amber-600" title={`+${row.extraHours}h Overtime auto-added to Total`}>
-                              (+{row.extraHours}h OT)
-                            </span>
-                          )}
-                        </div>
-                      )}
+                    {/* Total Hours (Directly Editable) */}
+                    <td className="py-1.5 px-1 text-center border-r border-slate-200">
+                      <div className="flex flex-col items-center">
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={row.totalHours || ''}
+                          onChange={e => handleRowChange(idx, 'totalHours', e.target.value)}
+                          placeholder="Hrs"
+                          className="w-full px-1 py-1 text-xs font-mono font-bold text-center border border-slate-300 rounded bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500"
+                          disabled={isOff}
+                        />
+                        {hasOt && !isOff && (
+                          <span className="text-[9px] font-bold text-amber-600 leading-none mt-0.5" title={`+${row.extraHours}h Overtime auto-added to Total`}>
+                            +{row.extraHours}h OT
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Night Charges */}
