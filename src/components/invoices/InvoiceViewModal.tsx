@@ -98,18 +98,20 @@ export const InvoiceViewModal: React.FC = () => {
       if (slip) {
         const hours = slip.totalHours || 0;
         const km = slip.totalKm || 0;
-        const ot = slip.otherExpenses > 0 ? slip.otherExpenses : Math.max(0, hours - 8) * rateOt;
         const night = slip.nightCharges || 0;
         const parking = (slip.parkingCharges || 0) + (slip.tollCharges || 0);
-        const kmCharge = km * rateKm;
-        const higherDutyCharge = Math.max(kmCharge, ot);
-        const dayTotal = higherDutyCharge + night + parking;
+        const baseKm = 100;
+        const baseHrs = 10;
+        const basePrice = (km > 0 || hours > 0) ? baseKm * rateKm : 0;
+        const extraKmCharge = Math.max(0, km - baseKm) * rateKm;
+        const extraHourCharge = Math.max(0, hours - baseHrs) * rateOt;
+        const highestExtra = Math.max(extraKmCharge, extraHourCharge);
+        const dayTotal = basePrice + highestExtra + night + parking;
         const isOffDay = km === 0 && (slip.route?.toLowerCase().includes('off') || slip.route?.toLowerCase().includes('garage'));
 
-        if (!isOffDay && (km > 0 || hours > 0 || ot > 0 || night > 0 || parking > 0)) {
+        if (!isOffDay && (km > 0 || hours > 0 || night > 0 || parking > 0)) {
           sumHours += hours;
           sumKm += km;
-          sumOt += ot;
           sumNight += night;
           sumParking += parking;
 
