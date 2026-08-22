@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { LoginScreen } from './components/auth/LoginScreen';
 import { Navbar } from './components/layout/Navbar';
 import { DashboardOverview } from './components/dashboard/DashboardOverview';
 import { InvoiceList } from './components/invoices/InvoiceList';
@@ -10,10 +12,9 @@ import { ClientList } from './components/clients/ClientList';
 import { MonthlyReportView } from './components/reports/MonthlyReportView';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { InvoiceViewModal } from './components/invoices/InvoiceViewModal';
-import { CreditCard, Sparkles } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
-  const { activeTab, company, setIsSettingsModalOpen } = useApp();
+  const { activeTab, company } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -53,11 +54,25 @@ const MainLayout: React.FC = () => {
   );
 };
 
-export function App() {
+const AuthGate: React.FC = () => {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <LoginScreen />;
+  }
+
   return (
     <AppProvider>
       <MainLayout />
     </AppProvider>
+  );
+};
+
+export function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
   );
 }
 

@@ -9,9 +9,11 @@ import {
   Settings, 
   Building2,
   Menu,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { ActiveTab } from '../../types';
 
 interface NavbarProps {
@@ -21,6 +23,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ mobileMenuOpen, setMobileMenuOpen }) => {
   const { company, activeTab, setActiveTab, setIsSettingsModalOpen } = useApp();
+  const { user, logout } = useAuth();
 
   const navItems: { id: ActiveTab; label: string; icon: React.ElementType }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
@@ -88,10 +91,37 @@ export const Navbar: React.FC<NavbarProps> = ({ mobileMenuOpen, setMobileMenuOpe
               <Settings className="w-4 h-4 text-emerald-400" />
               <span>Bank & Profile</span>
             </button>
+
+            {/* Logged in User & Logout */}
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
+              <div className="text-right hidden md:block">
+                <div className="text-[11px] font-bold text-white leading-tight">
+                  {user?.name || 'Biswajit Pramanik'}
+                </div>
+                <div className="text-[9px] text-emerald-400 font-semibold leading-none">
+                  Owner / Admin
+                </div>
+              </div>
+              <button
+                onClick={logout}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors flex items-center gap-1 text-xs font-medium"
+                title="Sign Out of Portal"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden md:inline text-[11px]">Logout</span>
+              </button>
+            </div>
           </div>
 
           {/* Mobile menu button */}
           <div className="flex lg:hidden items-center gap-2">
+            <button
+              onClick={logout}
+              className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800"
+              title="Sign Out"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
             <button
               onClick={() => setIsSettingsModalOpen(true)}
               className="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800"
