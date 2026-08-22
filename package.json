@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build && git add . && git commit -m \"chore: deploy update\" && git push origin master"
   },
   "dependencies": {
     "clsx": "^2.1.1",
