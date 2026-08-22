@@ -222,6 +222,41 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     });
   };
 
+  // Fill all 30 days as active continuous duty
+  const handleFillAllDaysActive = (includeSundays = true) => {
+    setRows(prev => {
+      let currentKm = initialStartKm;
+      return prev.map(row => {
+        const isOff = !includeSundays && row.isSunday;
+        const start = currentKm;
+        const run = isOff ? 0 : dailyAvgKm;
+        const end = start + run;
+        currentKm = end;
+
+        const metrics = calculateDutySlipMetrics({
+          startKm: start,
+          endKm: end,
+          startTime: isOff ? '' : '08:30',
+          endTime: isOff ? '' : '18:30',
+          baseDutyHours: 8
+        });
+
+        return {
+          ...row,
+          isOffDay: isOff,
+          route: isOff ? 'Sunday Off / Garage Day' : 'Local Corporate Movement & Office Duty',
+          startKm: start,
+          endKm: end,
+          totalKm: isOff ? 0 : run,
+          startTime: isOff ? '' : '08:30',
+          endTime: isOff ? '' : '18:30',
+          totalHours: isOff ? 0 : metrics.totalHours,
+          extraHours: isOff ? 0 : metrics.extraHours,
+        };
+      });
+    });
+  };
+
   // Toggle Day Off (e.g. Sunday or holiday)
   const handleToggleOffDay = (index: number) => {
     setRows(prev => {
@@ -454,6 +489,23 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>Auto-Chain KM Sequence</span>
+          </button>
+
+          <button
+            onClick={() => handleFillAllDaysActive(true)}
+            className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg font-bold flex items-center gap-1.5 transition-colors"
+            title="Fill all 30/31 days with daily run (e.g. 80 KM/day)"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+            <span>⚡ Fill All 30 Days Active</span>
+          </button>
+
+          <button
+            onClick={() => handleFillAllDaysActive(false)}
+            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-bold flex items-center gap-1.5 transition-colors"
+            title="Fill working days (Mon-Sat) and mark Sundays as Off"
+          >
+            <span>Fill Mon-Sat (Sundays Off)</span>
           </button>
         </div>
 

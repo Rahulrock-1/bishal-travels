@@ -54,9 +54,11 @@ export const InvoicePrintTemplate: React.FC<InvoicePrintTemplateProps> = ({
         {/* Invoice Title & Metadata */}
         <div className="text-right">
           <div className="inline-block bg-slate-900 text-white px-3.5 py-1 text-xs font-extrabold tracking-wider uppercase rounded">
-            TAX INVOICE
+            {invoice.taxType === 'NON_GST' || invoice.taxRate === 0 ? 'MONTHLY BILL / COMMERCIAL INVOICE' : 'TAX INVOICE'}
           </div>
-          <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">Original for Recipient</div>
+          <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">
+            {invoice.taxType === 'NON_GST' || invoice.taxRate === 0 ? 'Non-GST Billing' : 'Original for Recipient'}
+          </div>
 
           <div className="mt-3 text-xs space-y-1">
             <div>

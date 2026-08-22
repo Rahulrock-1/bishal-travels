@@ -192,6 +192,59 @@ export const InvoiceGenerator: React.FC = () => {
     setAttachedDutySlipIds(prev => [...prev, ...matchingSlips.map(s => s.id)]);
   };
 
+  // 30 Days Full Run Non-GST Preset
+  const handleApply30DaysNonGstBilling = () => {
+    const vehicle = vehicles.find(v => v.id === selectedVehicleId) || vehicles[0];
+    if (!vehicle) return;
+
+    // Pull all slips for this vehicle
+    const matchingSlips = dutySlips.filter(
+      ds => ds.vehicleId === vehicle.id && (ds.clientId === selectedClientId || !ds.clientId)
+    );
+
+    const totalKm = matchingSlips.length > 0 
+      ? matchingSlips.reduce((sum, s) => sum + s.totalKm, 0) 
+      : 2400; // default 30 days * 80 KM/day
+    
+    const totalNight = matchingSlips.reduce((sum, s) => sum + s.nightCharges, 0);
+    const totalParking = matchingSlips.reduce((sum, s) => sum + s.parkingCharges, 0);
+    const totalToll = matchingSlips.reduce((sum, s) => sum + s.tollCharges, 0);
+    const totalBatta = matchingSlips.reduce((sum, s) => sum + s.driverBatta, 0);
+
+    const baseMonthlyAmt = vehicle.baseMonthlyRate || 38000;
+    const extraKmCharges = totalKm > 2500 ? (totalKm - 2500) * vehicle.ratePerKm : 0;
+
+    const newItem: InvoiceItem = {
+      id: `item-${Date.now()}`,
+      description: `30 Days Monthly Vehicle Duty - ${vehicle.model} (${vehicle.regNumber}) [${matchingSlips.length > 0 ? matchingSlips.length : 30} Days, ${totalKm} KM Run]`,
+      vehicleRegNo: vehicle.regNumber,
+      vehicleModel: vehicle.model,
+      billingType: 'MonthlyPackage',
+      basePackageAmount: baseMonthlyAmt,
+      totalRunKm: totalKm,
+      ratePerKm: vehicle.ratePerKm,
+      kmCharges: 0,
+      extraKm: Math.max(0, totalKm - 2500),
+      extraKmRate: vehicle.ratePerKm,
+      extraKmCharges: extraKmCharges,
+      extraHours: 0,
+      extraHourRate: vehicle.ratePerHour,
+      extraHourCharges: 0,
+      nightCharges: totalNight,
+      parkingCharges: totalParking,
+      tollCharges: totalToll,
+      driverAllowance: totalBatta,
+      otherCharges: 0,
+      amount: baseMonthlyAmt + extraKmCharges + totalNight + totalParking + totalToll + totalBatta
+    };
+
+    setTaxType('NON_GST'); // Non-GST by default!
+    setItems([newItem]);
+    if (matchingSlips.length > 0) {
+      setAttachedDutySlipIds(matchingSlips.map(s => s.id));
+    }
+  };
+
   const handleAddItem = () => {
     const vehicle = vehicles.find(v => v.id === selectedVehicleId) || vehicles[0];
     const newItem: InvoiceItem = {
@@ -439,22 +492,32 @@ export const InvoiceGenerator: React.FC = () => {
                 2. Vehicle & Rate Package
               </h3>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleApply30DaysNonGstBilling}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all hover:scale-105"
+                  title="Quick-generate invoice for 30 days of vehicle duty without GST"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+                  <span>⚡ 30 Days Full Run (Non-GST)</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleAggregateFromDutySlips}
-                  className="px-3 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
+                  className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Pull Unbilled Duty Slips</span>
+                  <span>Pull Duty Slips</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={buildInitialPackageItem}
-                  className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-lg transition-colors"
                 >
-                  Apply Vehicle Default Package
+                  Monthly Package
                 </button>
               </div>
             </div>
@@ -652,21 +715,66 @@ export const InvoiceGenerator: React.FC = () => {
             <div className="space-y-3 text-xs">
               {/* Tax Selection */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  GST Tax Rate
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5 flex items-center justify-between">
+                  <span>Tax & GST Setting</span>
+                  {taxType === 'NON_GST' && (
+                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">
+                      Non-GST Invoice
+                    </span>
+                  )}
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={taxType}
-                    onChange={e => setTaxType(e.target.value as TaxType)}
-                    className="px-3 py-1.5 text-xs font-semibold border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="GST_5">GST 5% (Travel)</option>
-                    <option value="GST_12">GST 12%</option>
-                    <option value="GST_18">GST 18%</option>
-                    <option value="NON_GST">Non-GST (0%)</option>
-                  </select>
 
+                <div className="grid grid-cols-2 gap-1.5 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setTaxType('NON_GST')}
+                    className={`py-2 px-2.5 rounded-lg text-xs font-bold border transition-all ${
+                      taxType === 'NON_GST'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    Non-GST (0%)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTaxType('GST_5')}
+                    className={`py-2 px-2.5 rounded-lg text-xs font-bold border transition-all ${
+                      taxType === 'GST_5'
+                        ? 'bg-emerald-700 text-white border-emerald-700 shadow-sm'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    GST 5% (Standard)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTaxType('GST_12')}
+                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border transition-all ${
+                      taxType === 'GST_12'
+                        ? 'bg-emerald-700 text-white border-emerald-700'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    GST 12%
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTaxType('GST_18')}
+                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border transition-all ${
+                      taxType === 'GST_18'
+                        ? 'bg-emerald-700 text-white border-emerald-700'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    GST 18%
+                  </button>
+                </div>
+
+                {taxType !== 'NON_GST' && (
                   <label className="flex items-center gap-2 p-1.5 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 cursor-pointer bg-slate-50">
                     <input
                       type="checkbox"
@@ -674,9 +782,9 @@ export const InvoiceGenerator: React.FC = () => {
                       onChange={e => setIsInterstate(e.target.checked)}
                       className="text-emerald-600 rounded"
                     />
-                    <span>Interstate (IGST)</span>
+                    <span>Interstate Billing (IGST)</span>
                   </label>
-                </div>
+                )}
               </div>
 
               {/* Deductions & Advance */}
