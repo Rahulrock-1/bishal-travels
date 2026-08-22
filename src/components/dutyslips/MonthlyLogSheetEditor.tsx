@@ -18,7 +18,8 @@ import {
   Download,
   Eye,
   Printer,
-  X
+  X,
+  DollarSign
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DutySlip } from '../../types';
@@ -43,10 +44,12 @@ interface DailyRowData {
   endTime: string;
   totalHours: number;
   extraHours: number;
+  overtimeCharges: number;
   nightCharges: number;
   parkingCharges: number;
   tollCharges: number;
   driverBatta: number;
+  dayTotalAmount: number;
   notes: string;
 }
 
@@ -70,6 +73,11 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const [selectedClientId, setSelectedClientId] = useState<string>(clients[0]?.id || '');
   const [driverName, setDriverName] = useState<string>(vehicles[0]?.driverName || '');
   
+  // Pricing configuration for automatic total calculation
+  const currentVeh = vehicles.find(v => v.id === selectedVehicleId) || vehicles[0];
+  const [ratePerKm, setRatePerKm] = useState<number>(currentVeh?.ratePerKm || 14);
+  const [overtimeRatePerHour, setOvertimeRatePerHour] = useState<number>(currentVeh?.ratePerHour || 100);
+
   // Starting base odometer for Day 1
   const [initialStartKm, setInitialStartKm] = useState<number>(14000);
   const [dailyAvgKm, setDailyAvgKm] = useState<number>(90);
@@ -79,13 +87,32 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
   const [rows, setRows] = useState<DailyRowData[]>([]);
 
-  // Update driver name when vehicle changes
+  // Update rates & driver name when vehicle changes
   useEffect(() => {
     const veh = vehicles.find(v => v.id === selectedVehicleId);
     if (veh) {
       setDriverName(veh.driverName || '');
+      setRatePerKm(veh.ratePerKm || 14);
+      setOvertimeRatePerHour(veh.ratePerHour || 100);
     }
   }, [selectedVehicleId, vehicles]);
+
+  // Recalculate daily total amounts whenever ratePerKm or overtimeRatePerHour changes
+  const computeRowTotal = (
+    km: number, 
+    extraHrs: number, 
+    otCharges: number, 
+    night: number, 
+    parking: number, 
+    toll: number, 
+    batta: number,
+    kmRate: number,
+    otRate: number
+  ) => {
+    const kmCost = (km || 0) * kmRate;
+    const otCost = otCharges > 0 ? otCharges : (extraHrs || 0) * otRate;
+    return kmCost + otCost + (night || 0) + (parking || 0) + (toll || 0) + (batta || 0);
+  };
 
   // Generate rows for all days in the selected month & year
   useEffect(() => {
@@ -110,12 +137,26 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       const existing = slipMap.get(dateStr);
 
       if (existing) {
+        const isOff = existing.totalKm === 0 && existing.route.toLowerCase().includes('off');
+        const otCost = (existing.extraHours || 0) * overtimeRatePerHour;
+        const dayTotal = isOff ? 0 : computeRowTotal(
+          existing.totalKm,
+          existing.extraHours,
+          otCost,
+          existing.nightCharges,
+          existing.parkingCharges,
+          existing.tollCharges,
+          existing.driverBatta,
+          ratePerKm,
+          overtimeRatePerHour
+        );
+
         generatedRows.push({
           dayNumber: day,
           dateStr,
           dayName,
           isSunday,
-          isOffDay: existing.totalKm === 0 && existing.route.toLowerCase().includes('off'),
+          isOffDay: isOff,
           dutySlipNo: existing.dutySlipNo || `DS-${selectedYear}-${String(day).padStart(2, '0')}`,
           route: existing.route || (isSunday ? 'Sunday Off / Garage Maintenance' : 'Local Corporate Movement'),
           startKm: existing.startKm,
@@ -125,10 +166,12 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           endTime: existing.endTime || (isSunday ? '' : '18:30'),
           totalHours: existing.totalHours || 0,
           extraHours: existing.extraHours || 0,
+          overtimeCharges: otCost,
           nightCharges: existing.nightCharges || 0,
           parkingCharges: existing.parkingCharges || 0,
           tollCharges: existing.tollCharges || 0,
           driverBatta: existing.driverBatta || 0,
+          dayTotalAmount: dayTotal,
           notes: existing.notes || '',
         });
         rollingKm = existing.endKm;
@@ -147,6 +190,19 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           baseDutyHours: 8
         });
 
+        const otCost = isOff ? 0 : (metrics.extraHours || 0) * overtimeRatePerHour;
+        const dayTotal = isOff ? 0 : computeRowTotal(
+          metrics.totalKm,
+          metrics.extraHours,
+          otCost,
+          0,
+          0,
+          0,
+          0,
+          ratePerKm,
+          overtimeRatePerHour
+        );
+
         generatedRows.push({
           dayNumber: day,
           dateStr,
@@ -162,10 +218,12 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           endTime: isOff ? '' : '18:30',
           totalHours: isOff ? 0 : metrics.totalHours,
           extraHours: isOff ? 0 : metrics.extraHours,
+          overtimeCharges: otCost,
           nightCharges: 0,
           parkingCharges: 0,
           tollCharges: 0,
           driverBatta: 0,
+          dayTotalAmount: dayTotal,
           notes: '',
         });
       }
@@ -173,6 +231,26 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
     setRows(generatedRows);
   }, [selectedYear, selectedMonth, selectedVehicleId]);
+
+  // Recalculate row totals if user changes ratePerKm or overtimeRatePerHour
+  useEffect(() => {
+    setRows(prev => prev.map(row => {
+      if (row.isOffDay) return row;
+      const ot = row.overtimeCharges > 0 ? row.overtimeCharges : (row.extraHours || 0) * overtimeRatePerHour;
+      const total = computeRowTotal(
+        row.totalKm,
+        row.extraHours,
+        ot,
+        row.nightCharges,
+        row.parkingCharges,
+        row.tollCharges,
+        row.driverBatta,
+        ratePerKm,
+        overtimeRatePerHour
+      );
+      return { ...row, overtimeCharges: ot, dayTotalAmount: total };
+    }));
+  }, [ratePerKm, overtimeRatePerHour]);
 
   // Handle single row cell update
   const handleRowChange = (index: number, field: keyof DailyRowData, val: any) => {
@@ -197,7 +275,25 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         row.totalKm = metrics.totalKm;
         row.totalHours = metrics.totalHours;
         row.extraHours = metrics.extraHours;
+        row.overtimeCharges = metrics.extraHours * overtimeRatePerHour;
       }
+
+      if (field === 'overtimeCharges') {
+        row.overtimeCharges = Number(val) || 0;
+      }
+
+      // Re-calculate day total
+      row.dayTotalAmount = row.isOffDay ? 0 : computeRowTotal(
+        row.totalKm,
+        row.extraHours,
+        row.overtimeCharges,
+        Number(row.nightCharges) || 0,
+        Number(row.parkingCharges) || 0,
+        Number(row.tollCharges) || 0,
+        Number(row.driverBatta) || 0,
+        ratePerKm,
+        overtimeRatePerHour
+      );
 
       copy[index] = row;
       return copy;
@@ -216,17 +312,36 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
             endKm: currentKm,
             totalKm: 0,
             totalHours: 0,
-            extraHours: 0
+            extraHours: 0,
+            overtimeCharges: 0,
+            dayTotalAmount: 0
           };
         }
         const start = currentKm;
         const end = start + (row.totalKm > 0 ? row.totalKm : dailyAvgKm);
+        const km = end - start;
         currentKm = end;
+        
+        const ot = row.overtimeCharges > 0 ? row.overtimeCharges : (row.extraHours || 0) * overtimeRatePerHour;
+        const total = computeRowTotal(
+          km,
+          row.extraHours,
+          ot,
+          row.nightCharges,
+          row.parkingCharges,
+          row.tollCharges,
+          row.driverBatta,
+          ratePerKm,
+          overtimeRatePerHour
+        );
+
         return {
           ...row,
           startKm: start,
           endKm: end,
-          totalKm: end - start
+          totalKm: km,
+          overtimeCharges: ot,
+          dayTotalAmount: total
         };
       });
     });
@@ -251,6 +366,19 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           baseDutyHours: 8
         });
 
+        const ot = isOff ? 0 : metrics.extraHours * overtimeRatePerHour;
+        const total = isOff ? 0 : computeRowTotal(
+          metrics.totalKm,
+          metrics.extraHours,
+          ot,
+          0,
+          0,
+          0,
+          0,
+          ratePerKm,
+          overtimeRatePerHour
+        );
+
         return {
           ...row,
           isOffDay: isOff,
@@ -262,6 +390,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           endTime: isOff ? '' : '18:30',
           totalHours: isOff ? 0 : metrics.totalHours,
           extraHours: isOff ? 0 : metrics.extraHours,
+          overtimeCharges: ot,
+          dayTotalAmount: total
         };
       });
     });
@@ -273,21 +403,37 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       const copy = [...prev];
       const row = copy[index];
       const isOff = !row.isOffDay;
+      const totalKm = isOff ? 0 : dailyAvgKm;
+      const ot = isOff ? 0 : 2 * overtimeRatePerHour;
+      const total = isOff ? 0 : computeRowTotal(
+        totalKm,
+        2,
+        ot,
+        0,
+        0,
+        0,
+        0,
+        ratePerKm,
+        overtimeRatePerHour
+      );
+
       copy[index] = {
         ...row,
         isOffDay: isOff,
         route: isOff ? 'Day Off / Garage Maintenance' : 'Local Corporate Movement',
         startKm: row.startKm,
         endKm: isOff ? row.startKm : row.startKm + dailyAvgKm,
-        totalKm: isOff ? 0 : dailyAvgKm,
+        totalKm: totalKm,
         startTime: isOff ? '' : '08:30',
         endTime: isOff ? '' : '18:30',
         totalHours: isOff ? 0 : 10,
         extraHours: isOff ? 0 : 2,
+        overtimeCharges: ot,
         nightCharges: 0,
         parkingCharges: 0,
         tollCharges: 0,
-        driverBatta: 0
+        driverBatta: 0,
+        dayTotalAmount: total
       };
       return copy;
     });
@@ -296,10 +442,12 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   // Calculate totals
   const totalMonthKm = rows.reduce((sum, r) => sum + (r.totalKm || 0), 0);
   const totalMonthHours = rows.reduce((sum, r) => sum + (r.totalHours || 0), 0);
+  const totalMonthOvertime = rows.reduce((sum, r) => sum + (Number(r.overtimeCharges) || 0), 0);
   const totalMonthNight = rows.reduce((sum, r) => sum + (Number(r.nightCharges) || 0), 0);
   const totalMonthParking = rows.reduce((sum, r) => sum + (Number(r.parkingCharges) || 0), 0);
   const totalMonthToll = rows.reduce((sum, r) => sum + (Number(r.tollCharges) || 0), 0);
   const totalMonthBatta = rows.reduce((sum, r) => sum + (Number(r.driverBatta) || 0), 0);
+  const grandTotalAmount = rows.reduce((sum, r) => sum + (Number(r.dayTotalAmount) || 0), 0);
   const totalWorkingDays = rows.filter(r => !r.isOffDay && r.totalKm > 0).length;
 
   // Save all rows to AppContext duty slips
@@ -328,7 +476,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         tollCharges: Number(r.tollCharges) || 0,
         driverBatta: Number(r.driverBatta) || 0,
         fuelCharges: 0,
-        otherExpenses: 0,
+        otherExpenses: Number(r.overtimeCharges) || 0,
         notes: r.notes,
       };
 
@@ -353,7 +501,6 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     const elementId = 'bishal-sheet-preview-render-modal';
     const filename = `${company.businessName || 'BISHAL_TRAVELS'}_${selectedVeh?.regNumber || 'Vehicle'}_${selectedMonthName.replace(/\s+/g, '_')}`;
 
-    // Open modal so it's guaranteed visible in DOM, then trigger download
     setIsPreviewOpen(true);
     setTimeout(async () => {
       await downloadInvoiceAsPdf(elementId, filename);
@@ -375,7 +522,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               Daily Car Run & Surcharge Sheet (1st to 31st)
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              Fill in day-by-day odometer readings, start/closing times, night halt charges, parking and tolls in one single monthly spreadsheet view.
+              Set default Rate/KM and Overtime rate to auto-calculate daily & monthly total billing amounts.
             </p>
           </div>
 
@@ -399,11 +546,11 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           </div>
         </div>
 
-        {/* Selection Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-800 text-xs">
+        {/* Selection & Rate Settings Bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 pt-3 border-t border-slate-800 text-xs">
           <div>
             <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
-              Select Month & Year
+              Month & Year
             </label>
             <div className="flex gap-2">
               <select
@@ -449,19 +596,28 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
           <div>
             <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
-              Select Client / Account
+              Default Rate / KM (₹)
             </label>
-            <select
-              value={selectedClientId}
-              onChange={e => setSelectedClientId(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-semibold"
-            >
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.companyName || c.name}
-                </option>
-              ))}
-            </select>
+            <input
+              type="number"
+              value={ratePerKm}
+              onChange={e => setRatePerKm(Number(e.target.value))}
+              className="w-full px-2.5 py-1.5 bg-slate-800 text-amber-300 border border-slate-700 rounded-lg font-mono font-black text-sm"
+              placeholder="e.g. 14"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+              Overtime Rate / Hr (₹)
+            </label>
+            <input
+              type="number"
+              value={overtimeRatePerHour}
+              onChange={e => setOvertimeRatePerHour(Number(e.target.value))}
+              className="w-full px-2.5 py-1.5 bg-slate-800 text-emerald-300 border border-slate-700 rounded-lg font-mono font-black text-sm"
+              placeholder="e.g. 100"
+            />
           </div>
 
           <div>
@@ -539,7 +695,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
         <div className="flex items-center gap-2 text-slate-500 text-[11px]">
           <Info className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Click "OFF" on any day to exclude it from the PDF</span>
+          <span>Rates: ₹{ratePerKm}/KM + ₹{overtimeRatePerHour}/Hr Overtime</span>
         </div>
       </div>
 
@@ -549,20 +705,22 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           <table className="w-full text-left border-collapse text-xs">
             <thead className="sticky top-0 z-20 bg-slate-900 text-white font-bold text-[10px] uppercase tracking-wider">
               <tr>
-                <th className="py-2.5 px-3 w-16 text-center border-r border-slate-700">Day / Date</th>
-                <th className="py-2.5 px-2.5 w-20 border-r border-slate-700">Slip No</th>
-                <th className="py-2.5 px-3 border-r border-slate-700">Route & Duty Particulars</th>
-                <th className="py-2.5 px-2 w-24 text-center border-r border-slate-700">Start KM</th>
-                <th className="py-2.5 px-2 w-24 text-center border-r border-slate-700">End KM</th>
-                <th className="py-2.5 px-2 w-20 text-center border-r border-slate-700">Run (KM)</th>
-                <th className="py-2.5 px-2 w-20 text-center border-r border-slate-700">Start Time</th>
-                <th className="py-2.5 px-2 w-20 text-center border-r border-slate-700">End Time</th>
-                <th className="py-2.5 px-2 w-16 text-center border-r border-slate-700">Hours</th>
-                <th className="py-2.5 px-2 w-20 text-right border-r border-slate-700">Night (₹)</th>
-                <th className="py-2.5 px-2 w-20 text-right border-r border-slate-700">Parking (₹)</th>
-                <th className="py-2.5 px-2 w-20 text-right border-r border-slate-700">Toll (₹)</th>
-                <th className="py-2.5 px-2 w-20 text-right border-r border-slate-700">Batta (₹)</th>
-                <th className="py-2.5 px-2 w-16 text-center">Status</th>
+                <th className="py-2.5 px-2.5 w-14 text-center border-r border-slate-700">Day / Date</th>
+                <th className="py-2.5 px-2 w-18 border-r border-slate-700">Slip No</th>
+                <th className="py-2.5 px-2.5 border-r border-slate-700">Route & Duty Particulars</th>
+                <th className="py-2.5 px-1.5 w-20 text-center border-r border-slate-700">Start KM</th>
+                <th className="py-2.5 px-1.5 w-20 text-center border-r border-slate-700">End KM</th>
+                <th className="py-2.5 px-1.5 w-16 text-center border-r border-slate-700">Run (KM)</th>
+                <th className="py-2.5 px-1.5 w-16 text-center border-r border-slate-700">Start Time</th>
+                <th className="py-2.5 px-1.5 w-16 text-center border-r border-slate-700">End Time</th>
+                <th className="py-2.5 px-1.5 w-14 text-center border-r border-slate-700">Hours</th>
+                <th className="py-2.5 px-1.5 w-20 text-right border-r border-slate-700">OT (₹)</th>
+                <th className="py-2.5 px-1.5 w-18 text-right border-r border-slate-700">Night (₹)</th>
+                <th className="py-2.5 px-1.5 w-18 text-right border-r border-slate-700">Park (₹)</th>
+                <th className="py-2.5 px-1.5 w-18 text-right border-r border-slate-700">Toll (₹)</th>
+                <th className="py-2.5 px-1.5 w-18 text-right border-r border-slate-700">Batta (₹)</th>
+                <th className="py-2.5 px-2 w-24 text-right border-r border-slate-700 bg-emerald-950 text-emerald-300">Total (₹)</th>
+                <th className="py-2.5 px-1.5 w-12 text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 font-medium text-slate-800">
@@ -582,7 +740,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                     }`}
                   >
                     {/* Day & Date */}
-                    <td className="py-1.5 px-3 text-center border-r border-slate-200 font-mono">
+                    <td className="py-1.5 px-2 text-center border-r border-slate-200 font-mono">
                       <div className="font-bold text-slate-900 text-xs">
                         {String(row.dayNumber).padStart(2, '0')}
                       </div>
@@ -592,12 +750,12 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                     </td>
 
                     {/* Slip No */}
-                    <td className="py-1.5 px-2 border-r border-slate-200">
+                    <td className="py-1.5 px-1.5 border-r border-slate-200">
                       <input
                         type="text"
                         value={row.dutySlipNo}
                         onChange={e => handleRowChange(idx, 'dutySlipNo', e.target.value)}
-                        className="w-full px-1.5 py-1 text-[11px] font-mono border border-slate-200 rounded bg-white"
+                        className="w-full px-1 py-1 text-[11px] font-mono border border-slate-200 rounded bg-white"
                       />
                     </td>
 
@@ -634,7 +792,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                         type="number"
                         value={row.startKm}
                         onChange={e => handleRowChange(idx, 'startKm', e.target.value)}
-                        className="w-full px-1.5 py-1 text-xs font-mono font-bold text-center border border-slate-200 rounded bg-white"
+                        className="w-full px-1 py-1 text-xs font-mono font-bold text-center border border-slate-200 rounded bg-white"
                         disabled={isOff}
                       />
                     </td>
@@ -645,14 +803,14 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                         type="number"
                         value={row.endKm}
                         onChange={e => handleRowChange(idx, 'endKm', e.target.value)}
-                        className="w-full px-1.5 py-1 text-xs font-mono font-bold text-center border border-slate-200 rounded bg-white"
+                        className="w-full px-1 py-1 text-xs font-mono font-bold text-center border border-slate-200 rounded bg-white"
                         disabled={isOff}
                       />
                     </td>
 
                     {/* Total KM Calculated */}
-                    <td className="py-1.5 px-2 text-center border-r border-slate-200 font-mono font-black text-emerald-950 text-xs">
-                      {isOff ? '-' : `${row.totalKm} KM`}
+                    <td className="py-1.5 px-1.5 text-center border-r border-slate-200 font-mono font-black text-emerald-950 text-xs">
+                      {isOff ? '-' : `${row.totalKm}`}
                     </td>
 
                     {/* Start Time */}
@@ -661,7 +819,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                         type="time"
                         value={row.startTime}
                         onChange={e => handleRowChange(idx, 'startTime', e.target.value)}
-                        className="w-full px-1 py-1 text-[11px] font-mono text-center border border-slate-200 rounded bg-white"
+                        className="w-full px-0.5 py-1 text-[11px] font-mono text-center border border-slate-200 rounded bg-white"
                         disabled={isOff}
                       />
                     </td>
@@ -672,7 +830,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                         type="time"
                         value={row.endTime}
                         onChange={e => handleRowChange(idx, 'endTime', e.target.value)}
-                        className="w-full px-1 py-1 text-[11px] font-mono text-center border border-slate-200 rounded bg-white"
+                        className="w-full px-0.5 py-1 text-[11px] font-mono text-center border border-slate-200 rounded bg-white"
                         disabled={isOff}
                       />
                     </td>
@@ -682,6 +840,18 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       {isOff ? '-' : `${row.totalHours}h`}
                     </td>
 
+                    {/* Overtime Charges */}
+                    <td className="py-1.5 px-1 border-r border-slate-200">
+                      <input
+                        type="number"
+                        value={row.overtimeCharges || ''}
+                        onChange={e => handleRowChange(idx, 'overtimeCharges', e.target.value)}
+                        placeholder="₹"
+                        className="w-full px-1 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-emerald-800 font-bold"
+                        disabled={isOff}
+                      />
+                    </td>
+
                     {/* Night Charges */}
                     <td className="py-1.5 px-1 border-r border-slate-200">
                       <input
@@ -689,7 +859,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                         value={row.nightCharges || ''}
                         onChange={e => handleRowChange(idx, 'nightCharges', e.target.value)}
                         placeholder="₹"
-                        className="w-full px-1.5 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-amber-800 font-bold"
+                        className="w-full px-1 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-amber-800 font-bold"
                         disabled={isOff}
                       />
                     </td>
@@ -701,7 +871,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                         value={row.parkingCharges || ''}
                         onChange={e => handleRowChange(idx, 'parkingCharges', e.target.value)}
                         placeholder="₹"
-                        className="w-full px-1.5 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-blue-800 font-bold"
+                        className="w-full px-1 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-blue-800 font-bold"
                         disabled={isOff}
                       />
                     </td>
@@ -713,7 +883,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                         value={row.tollCharges || ''}
                         onChange={e => handleRowChange(idx, 'tollCharges', e.target.value)}
                         placeholder="₹"
-                        className="w-full px-1.5 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-blue-800 font-bold"
+                        className="w-full px-1 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-blue-800 font-bold"
                         disabled={isOff}
                       />
                     </td>
@@ -725,13 +895,18 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                         value={row.driverBatta || ''}
                         onChange={e => handleRowChange(idx, 'driverBatta', e.target.value)}
                         placeholder="₹"
-                        className="w-full px-1.5 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-purple-800 font-bold"
+                        className="w-full px-1 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-purple-800 font-bold"
                         disabled={isOff}
                       />
                     </td>
 
+                    {/* Calculated Day Total Amount */}
+                    <td className="py-1.5 px-2 text-right border-r border-slate-200 font-mono font-black text-slate-900 bg-emerald-50/50 text-xs">
+                      {isOff ? '-' : `₹${row.dayTotalAmount.toLocaleString('en-IN')}`}
+                    </td>
+
                     {/* Status Pill */}
-                    <td className="py-1.5 px-2 text-center text-[10px]">
+                    <td className="py-1.5 px-1.5 text-center text-[10px]">
                       {isOff ? (
                         <span className="px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded font-bold">OFF</span>
                       ) : (
@@ -746,31 +921,37 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
             <tfoot className="sticky bottom-0 z-20 bg-slate-900 text-white font-bold border-t-2 border-slate-700 text-xs">
               <tr>
                 <td colSpan={3} className="py-3 px-3 uppercase text-[10px] tracking-wider text-emerald-400">
-                  Monthly Total Summary ({totalWorkingDays} Duty Days):
+                  Monthly Total ({totalWorkingDays} Duty Days):
                 </td>
                 <td colSpan={2} className="py-3 px-2 text-right text-slate-400 font-mono text-[11px]">
                   Total Distance:
                 </td>
-                <td className="py-3 px-2 text-center font-mono font-black text-emerald-300 text-sm">
+                <td className="py-3 px-1 text-center font-mono font-black text-emerald-300 text-xs">
                   {totalMonthKm} KM
                 </td>
-                <td colSpan={2} className="py-3 px-2 text-right text-slate-400 text-[11px]">
-                  Total Duty:
+                <td colSpan={2} className="py-3 px-1 text-right text-slate-400 text-[11px]">
+                  Total Hours:
                 </td>
                 <td className="py-3 px-1 text-center font-mono font-bold text-slate-200 text-xs">
                   {totalMonthHours.toFixed(1)}h
                 </td>
-                <td className="py-3 px-2 text-right font-mono font-bold text-amber-300 text-xs">
+                <td className="py-3 px-1.5 text-right font-mono font-bold text-emerald-300 text-xs">
+                  {totalMonthOvertime > 0 ? `₹${totalMonthOvertime}` : '-'}
+                </td>
+                <td className="py-3 px-1.5 text-right font-mono font-bold text-amber-300 text-xs">
                   {totalMonthNight > 0 ? `₹${totalMonthNight}` : '-'}
                 </td>
-                <td className="py-3 px-2 text-right font-mono font-bold text-blue-300 text-xs">
+                <td className="py-3 px-1.5 text-right font-mono font-bold text-blue-300 text-xs">
                   {totalMonthParking > 0 ? `₹${totalMonthParking}` : '-'}
                 </td>
-                <td className="py-3 px-2 text-right font-mono font-bold text-blue-300 text-xs">
+                <td className="py-3 px-1.5 text-right font-mono font-bold text-blue-300 text-xs">
                   {totalMonthToll > 0 ? `₹${totalMonthToll}` : '-'}
                 </td>
-                <td className="py-3 px-2 text-right font-mono font-bold text-purple-300 text-xs">
+                <td className="py-3 px-1.5 text-right font-mono font-bold text-purple-300 text-xs">
                   {totalMonthBatta > 0 ? `₹${totalMonthBatta}` : '-'}
+                </td>
+                <td className="py-3 px-2 text-right font-mono font-black text-amber-400 text-sm bg-slate-950">
+                  ₹{grandTotalAmount.toLocaleString('en-IN')}
                 </td>
                 <td></td>
               </tr>
@@ -787,10 +968,10 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           </div>
           <div>
             <h4 className="text-sm font-bold text-slate-900">
-              Ready to generate client invoice for {selectedMonthName}?
+              Monthly Net Amount: <span className="text-emerald-700 font-extrabold text-base font-mono">₹{grandTotalAmount.toLocaleString('en-IN')}</span>
             </h4>
             <p className="text-xs text-slate-500">
-              Save this log sheet to automatically pull these {totalMonthKm} KMs, ₹{totalMonthNight} night charges, and ₹{totalMonthParking + totalMonthToll} parking/toll expenses into the invoice.
+              Includes {totalMonthKm} KMs (@ ₹{ratePerKm}/KM) + ₹{totalMonthOvertime} Overtime + ₹{totalMonthNight} Night + ₹{totalMonthParking + totalMonthToll} Parking/Toll + ₹{totalMonthBatta} Batta.
             </p>
           </div>
         </div>
@@ -878,16 +1059,18 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                   date: formatDate(r.dateStr, 'dd-MM-yyyy'),
                   hours: r.totalHours > 0 ? r.totalHours : '',
                   km: r.totalKm > 0 ? r.totalKm : '',
+                  overtimeCharge: Number(r.overtimeCharges) || 0,
                   nightCharge: Number(r.nightCharges) || 0,
                   parkingCharge: (Number(r.parkingCharges) || 0) + (Number(r.tollCharges) || 0),
-                  totalAmount: 0,
+                  totalAmount: Number(r.dayTotalAmount) || 0,
                   isOff: r.isOffDay || r.totalKm === 0,
                 }))}
                 totalHours={Math.round(totalMonthHours)}
                 totalKm={totalMonthKm}
+                totalOvertime={totalMonthOvertime}
                 totalNight={totalMonthNight}
                 totalParking={totalMonthParking + totalMonthToll}
-                grandTotalAmount={0}
+                grandTotalAmount={grandTotalAmount}
                 client={selectedCli}
                 elementId="bishal-sheet-preview-render-modal"
                 hideOffDays={true}

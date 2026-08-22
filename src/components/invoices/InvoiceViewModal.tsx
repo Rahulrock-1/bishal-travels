@@ -58,6 +58,7 @@ export const InvoiceViewModal: React.FC = () => {
     rows: DailyReportRow[];
     totalHours: number;
     totalKm: number;
+    totalOvertime: number;
     totalNight: number;
     totalParking: number;
   } => {
@@ -81,8 +82,11 @@ export const InvoiceViewModal: React.FC = () => {
     const rows: DailyReportRow[] = [];
     let sumHours = 0;
     let sumKm = 0;
+    let sumOt = 0;
     let sumNight = 0;
     let sumParking = 0;
+    const rateKm = primaryVehicle?.ratePerKm || 14;
+    const rateOt = primaryVehicle?.ratePerHour || 100;
 
     for (let day = 1; day <= daysInMonth; day++) {
       const dateObj = new Date(year, monthIndex, day);
@@ -94,13 +98,16 @@ export const InvoiceViewModal: React.FC = () => {
       if (slip) {
         const hours = slip.totalHours || 0;
         const km = slip.totalKm || 0;
+        const ot = slip.otherExpenses > 0 ? slip.otherExpenses : (slip.extraHours || 0) * rateOt;
         const night = slip.nightCharges || 0;
         const parking = (slip.parkingCharges || 0) + (slip.tollCharges || 0);
+        const dayTotal = (km * rateKm) + ot + night + parking;
         const isOffDay = km === 0 && (slip.route?.toLowerCase().includes('off') || slip.route?.toLowerCase().includes('garage'));
 
-        if (!isOffDay && (km > 0 || hours > 0 || night > 0 || parking > 0)) {
+        if (!isOffDay && (km > 0 || hours > 0 || ot > 0 || night > 0 || parking > 0)) {
           sumHours += hours;
           sumKm += km;
+          sumOt += ot;
           sumNight += night;
           sumParking += parking;
 
@@ -108,9 +115,10 @@ export const InvoiceViewModal: React.FC = () => {
             date: displayDate,
             hours: hours > 0 ? hours : '',
             km: km > 0 ? km : '',
+            overtimeCharge: ot > 0 ? ot : undefined,
             nightCharge: night > 0 ? night : undefined,
             parkingCharge: parking,
-            totalAmount: 0,
+            totalAmount: dayTotal,
             isOff: false,
           });
         }
@@ -122,6 +130,7 @@ export const InvoiceViewModal: React.FC = () => {
       const mainItem = invoice.items[0];
       sumKm = mainItem.totalRunKm || 0;
       sumHours = 0;
+      sumOt = mainItem.extraHourCharges || 0;
       sumNight = mainItem.nightCharges || 0;
       sumParking = (mainItem.parkingCharges || 0) + (mainItem.tollCharges || 0);
     }
@@ -130,6 +139,7 @@ export const InvoiceViewModal: React.FC = () => {
       rows,
       totalHours: Math.round(sumHours),
       totalKm: sumKm,
+      totalOvertime: sumOt,
       totalNight: sumNight,
       totalParking: sumParking,
     };
@@ -266,6 +276,7 @@ export const InvoiceViewModal: React.FC = () => {
               rows={bishalReportData.rows}
               totalHours={bishalReportData.totalHours}
               totalKm={bishalReportData.totalKm}
+              totalOvertime={bishalReportData.totalOvertime}
               totalNight={bishalReportData.totalNight}
               totalParking={bishalReportData.totalParking}
               grandTotalAmount={invoice.netPayable || invoice.grandTotal}
