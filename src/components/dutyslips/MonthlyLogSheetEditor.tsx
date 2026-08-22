@@ -98,7 +98,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     }
   }, [selectedVehicleId, vehicles]);
 
-  // Compute row total amount (KM * Rate + Overtime automatically added + Surcharges)
+  // Compute row total amount (Takes HIGHEST amount between KM Charges vs Overtime Charges + Surcharges)
   const computeRowTotal = (
     km: number, 
     totalHrs: number,
@@ -113,7 +113,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     const kmCost = (km || 0) * kmRate;
     const extraHrs = Math.max(0, (totalHrs || 0) - baseDutyHrs);
     const otCost = extraHrs * otRate;
-    return kmCost + otCost + (night || 0) + (parking || 0) + (toll || 0) + (batta || 0);
+    const higherDutyCharge = Math.max(kmCost, otCost);
+    return higherDutyCharge + (night || 0) + (parking || 0) + (toll || 0) + (batta || 0);
   };
 
   // Generate rows for all days in the selected month & year
@@ -537,15 +538,11 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl border border-slate-800 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full text-xs font-bold mb-2">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Full Month Day-Wise Log Sheet</span>
-            </div>
             <h2 className="text-xl sm:text-2xl font-black text-white">
               Daily Car Run & Surcharge Sheet (1st to 31st)
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              Set standard duty hours (e.g. 8h/10h). Any hours beyond duty time automatically add overtime charges to the total amount.
+              Set standard duty hours (e.g. 8h/10h). Compares daily KM Charges vs Overtime Charges and takes the highest amount into Total.
             </p>
           </div>
 
@@ -731,7 +728,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
         <div className="flex items-center gap-2 text-slate-500 text-[11px]">
           <Info className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Standard: {defaultDutyHours}h duty. Beyond {defaultDutyHours}h auto-adds ₹{overtimeRatePerHour}/hr OT to Total.</span>
+          <span>Rule: Highest amount between KM Charges (₹{ratePerKm}/KM) and Overtime (₹{overtimeRatePerHour}/hr beyond {defaultDutyHours}h) is applied to Total.</span>
         </div>
       </div>
 
