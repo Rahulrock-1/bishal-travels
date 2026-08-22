@@ -15,14 +15,18 @@ import {
   Layers,
   ArrowRight,
   Info,
-  Download
+  Download,
+  Eye,
+  Printer,
+  X
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DutySlip } from '../../types';
 import { calculateDutySlipMetrics } from '../../utils/calculations';
 import { formatCurrency, formatKm, formatDate } from '../../utils/formatters';
 import { BishalMonthlyInvoicePdfTemplate } from '../invoices/BishalMonthlyInvoicePdfTemplate';
-import { downloadInvoiceAsPdf } from '../../utils/pdfGenerator';
+import { downloadInvoiceAsPdf, triggerPrint } from '../../utils/pdfGenerator';
+import { Modal } from '../common/Modal';
 
 interface DailyRowData {
   dayNumber: number;
@@ -70,6 +74,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const [initialStartKm, setInitialStartKm] = useState<number>(14000);
   const [dailyAvgKm, setDailyAvgKm] = useState<number>(90);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
 
   const [rows, setRows] = useState<DailyRowData[]>([]);
 
@@ -298,11 +304,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
   // Save all rows to AppContext duty slips
   const handleSaveAllSlips = () => {
-    let count = 0;
-    const monthPrefix = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
-
     rows.forEach(r => {
-      // Find existing slip for this date & vehicle
       const existing = dutySlips.find(
         ds => ds.vehicleId === selectedVehicleId && ds.date === r.dateStr
       );
@@ -335,16 +337,29 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       } else {
         addDutySlip(slipPayload);
       }
-      count++;
     });
 
-    setSaveSuccessMsg(`Successfully saved all ${rows.length} daily logs for ${new Date(selectedYear, selectedMonth).toLocaleString('en-US', { month: 'long', year: 'numeric' })}!`);
+    setSaveSuccessMsg(`Saved ${rows.length} daily logs for ${new Date(selectedYear, selectedMonth).toLocaleString('en-US', { month: 'long', year: 'numeric' })}!`);
     setTimeout(() => setSaveSuccessMsg(null), 3500);
   };
 
   const selectedMonthName = new Date(selectedYear, selectedMonth).toLocaleString('en-US', { month: 'long', year: 'numeric' });
-  const selectedVeh = vehicles.find(v => v.id === selectedVehicleId);
+  const selectedVeh = vehicles.find(v => v.id === selectedVehicleId) || vehicles[0];
   const selectedCli = clients.find(c => c.id === selectedClientId);
+
+  const handleTriggerDirectDownload = async () => {
+    handleSaveAllSlips();
+    setIsDownloadingPdf(true);
+    const elementId = 'bishal-sheet-preview-render-modal';
+    const filename = `${company.businessName || 'BISHAL_TRAVELS'}_${selectedVeh?.regNumber || 'Vehicle'}_${selectedMonthName.replace(/\s+/g, '_')}`;
+
+    // Open modal so it's guaranteed visible in DOM, then trigger download
+    setIsPreviewOpen(true);
+    setTimeout(async () => {
+      await downloadInvoiceAsPdf(elementId, filename);
+      setIsDownloadingPdf(false);
+    }, 400);
+  };
 
   return (
     <div className="space-y-6">
@@ -364,13 +379,22 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
-              onClick={handleSaveAllSlips}
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-900/30 transition-all hover:scale-105"
+              onClick={() => setIsPreviewOpen(true)}
+              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 border border-slate-700 transition-colors"
             >
-              <Save className="w-4 h-4" />
-              <span>Save Full Month Log Sheet</span>
+              <Eye className="w-4 h-4 text-emerald-400" />
+              <span>Preview Official PDF</span>
+            </button>
+
+            <button
+              onClick={handleTriggerDirectDownload}
+              disabled={isDownloadingPdf}
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 shadow-lg transition-all hover:scale-105"
+            >
+              <Download className="w-4 h-4" />
+              <span>{isDownloadingPdf ? 'Generating PDF...' : 'Download PDF Report'}</span>
             </button>
           </div>
         </div>
@@ -464,7 +488,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
       {/* Auto-Fill & Quick Tools Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-2">
             <span className="font-bold text-slate-700">Day 1 Start KM:</span>
             <input
@@ -515,7 +539,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
         <div className="flex items-center gap-2 text-slate-500 text-[11px]">
           <Info className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Click the "Off" button on any day to mark Sunday / Maintenance / Holiday</span>
+          <span>Click "OFF" on any day to exclude it from the PDF</span>
         </div>
       </div>
 
@@ -597,7 +621,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                               ? 'bg-rose-100 text-rose-800 border border-rose-200' 
                               : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
                           }`}
-                          title="Toggle Day Off / Sunday"
+                          title="Toggle Day Off (Will hide row from report)"
                         >
                           {isOff ? 'OFF' : 'ON'}
                         </button>
@@ -773,18 +797,11 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
           <button
-            onClick={() => {
-              handleSaveAllSlips();
-              downloadInvoiceAsPdf(
-                'bishal-sheet-direct-pdf-render',
-                `${company.businessName || 'BISHAL_TRAVELS'}_${selectedVeh?.regNumber || 'Vehicle'}_${selectedMonthName.replace(/\s+/g, '_')}`
-              );
-            }}
-            className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 shadow-sm transition-all hover:scale-105"
-            title="Download PDF in official BISHAL TRAVELS format matching JULU BISHAL.pdf"
+            onClick={() => setIsPreviewOpen(true)}
+            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm transition-colors"
           >
-            <Download className="w-4 h-4" />
-            <span>Download Official PDF (BISHAL Style)</span>
+            <Eye className="w-4 h-4 text-emerald-400" />
+            <span>Preview & Download PDF</span>
           </button>
 
           <button
@@ -808,36 +825,77 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         </div>
       </div>
 
-      {/* Hidden printable template container for direct 1-click PDF download */}
-      <div className="hidden">
-        <div id="bishal-sheet-direct-pdf-render">
-          {selectedVeh && (
-            <BishalMonthlyInvoicePdfTemplate
-              company={company}
-              vehicle={selectedVeh}
-              monthTitle={selectedMonthName}
-              invoiceDateStr={`31-${String(selectedMonth + 1).padStart(2, '0')}-${selectedYear}`}
-              rows={rows.map(r => ({
-                date: formatDate(r.dateStr, 'dd-MM-yyyy'),
-                hours: r.totalHours > 0 ? r.totalHours : '',
-                km: r.totalKm > 0 ? r.totalKm : '',
-                nightCharge: Number(r.nightCharges) || 0,
-                parkingCharge: (Number(r.parkingCharges) || 0) + (Number(r.tollCharges) || 0),
-                totalAmount: 0,
-                isOff: r.isOffDay || r.totalKm === 0,
-              }))}
-              totalHours={Math.round(totalMonthHours)}
-              totalKm={totalMonthKm}
-              totalNight={totalMonthNight}
-              totalParking={totalMonthParking + totalMonthToll}
-              grandTotalAmount={0}
-              client={selectedCli}
-              elementId="bishal-sheet-direct-pdf-render"
-              hideOffDays={true}
-            />
-          )}
+      {/* Preview & Download Modal for 100% Reliable PDF Download */}
+      <Modal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        title={`Monthly Vehicle Bill Preview - ${selectedVeh?.regNumber} (${selectedMonthName})`}
+        subtitle="Exact 1:1 BISHAL TRAVELS layout matching your official format"
+        maxWidth="4xl"
+      >
+        <div className="space-y-4">
+          {/* Top Actions Bar inside modal */}
+          <div className="flex items-center justify-between p-3 bg-slate-900 text-white rounded-xl no-print">
+            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4" />
+              <span>Official Format (Day Off Rows Hidden)</span>
+            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={triggerPrint}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors border border-slate-700"
+              >
+                <Printer className="w-3.5 h-3.5 text-blue-400" />
+                <span>Print</span>
+              </button>
+
+              <button
+                onClick={async () => {
+                  setIsDownloadingPdf(true);
+                  const filename = `${company.businessName || 'BISHAL_TRAVELS'}_${selectedVeh?.regNumber || 'Vehicle'}_${selectedMonthName.replace(/\s+/g, '_')}`;
+                  await downloadInvoiceAsPdf('bishal-sheet-preview-render-modal', filename);
+                  setIsDownloadingPdf(false);
+                }}
+                disabled={isDownloadingPdf}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow transition-all disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                <span>{isDownloadingPdf ? 'Generating PDF...' : 'Download PDF Report'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Render Container for high-quality capture */}
+          <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-100 p-4 md:p-6 shadow-inner flex justify-center">
+            {selectedVeh && (
+              <BishalMonthlyInvoicePdfTemplate
+                company={company}
+                vehicle={selectedVeh}
+                monthTitle={selectedMonthName}
+                invoiceDateStr={`31-${String(selectedMonth + 1).padStart(2, '0')}-${selectedYear}`}
+                rows={rows.map(r => ({
+                  date: formatDate(r.dateStr, 'dd-MM-yyyy'),
+                  hours: r.totalHours > 0 ? r.totalHours : '',
+                  km: r.totalKm > 0 ? r.totalKm : '',
+                  nightCharge: Number(r.nightCharges) || 0,
+                  parkingCharge: (Number(r.parkingCharges) || 0) + (Number(r.tollCharges) || 0),
+                  totalAmount: 0,
+                  isOff: r.isOffDay || r.totalKm === 0,
+                }))}
+                totalHours={Math.round(totalMonthHours)}
+                totalKm={totalMonthKm}
+                totalNight={totalMonthNight}
+                totalParking={totalMonthParking + totalMonthToll}
+                grandTotalAmount={0}
+                client={selectedCli}
+                elementId="bishal-sheet-preview-render-modal"
+                hideOffDays={true}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      </Modal>
     </div>
   );
 };

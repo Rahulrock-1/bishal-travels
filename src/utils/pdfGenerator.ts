@@ -15,13 +15,14 @@ export async function downloadInvoiceAsPdf(elementId: string, filename: string):
   }
 
   try {
-    // Temporarily ensure background is white and scale is high for crisp vector quality
+    // Render high quality canvas
     const canvas = await html2canvas(element, {
-      scale: 2.5,
+      scale: 2,
       useCORS: true,
       logging: false,
       backgroundColor: '#ffffff',
-      windowWidth: element.scrollWidth,
+      scrollX: 0,
+      scrollY: 0,
     });
 
     const imgData = canvas.toDataURL('image/png');
@@ -47,7 +48,8 @@ export async function downloadInvoiceAsPdf(elementId: string, filename: string):
       heightLeft -= pdfHeight;
     }
 
-    pdf.save(`${filename.replace(/[/\\?%*:|"<>]/g, '_')}.pdf`);
+    const cleanFilename = `${filename.replace(/[/\\?%*:|"<>]/g, '_')}.pdf`;
+    pdf.save(cleanFilename);
     return true;
   } catch (error) {
     console.error('Error generating PDF:', error);
