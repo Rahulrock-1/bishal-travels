@@ -89,13 +89,20 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
   const [rows, setRows] = useState<DailyRowData[]>([]);
 
-  // Update rates & driver name when vehicle changes
+  // Update rates, default base KM, duty hours & driver name when vehicle changes
   useEffect(() => {
     const veh = vehicles.find(v => v.id === selectedVehicleId);
     if (veh) {
       setDriverName(veh.driverName || '');
       setRatePerKm(veh.ratePerKm || 18);
       setOvertimeRatePerHour(veh.ratePerHour || 90);
+      if (veh.defaultDailyKm) {
+        setDefaultBaseKm(veh.defaultDailyKm);
+        setDailyAvgKm(veh.defaultDailyKm);
+      }
+      if (veh.defaultDailyHours) {
+        setDefaultDutyHours(veh.defaultDailyHours);
+      }
     }
   }, [selectedVehicleId, vehicles]);
 

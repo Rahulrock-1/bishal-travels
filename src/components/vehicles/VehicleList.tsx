@@ -154,16 +154,16 @@ export const VehicleList: React.FC = () => {
                   {/* Pricing Info */}
                   <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 text-xs space-y-1">
                     <div className="flex justify-between">
-                      <span className="text-slate-600">Monthly Package:</span>
-                      <strong className="text-emerald-900 font-mono">{formatCurrency(vehicle.baseMonthlyRate)}</strong>
+                      <span className="text-slate-600">Daily Base Package:</span>
+                      <strong className="text-emerald-900 font-mono">{vehicle.defaultDailyKm || 100} KM / {vehicle.defaultDailyHours || 10}h</strong>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600">Per KM Rate:</span>
-                      <strong className="text-emerald-900 font-mono">₹{vehicle.ratePerKm}/KM</strong>
+                      <span className="text-slate-600">Per KM / OT Rate:</span>
+                      <strong className="text-emerald-900 font-mono">₹{vehicle.ratePerKm}/KM • ₹{vehicle.ratePerHour}/hr</strong>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600">Extra Hour / Night:</span>
-                      <strong className="text-emerald-900 font-mono">₹{vehicle.ratePerHour}/hr • ₹{vehicle.nightChargeRate}/nt</strong>
+                      <span className="text-slate-600">Night Halt Charge:</span>
+                      <strong className="text-emerald-900 font-mono">₹{vehicle.nightChargeRate}/Night</strong>
                     </div>
                   </div>
 

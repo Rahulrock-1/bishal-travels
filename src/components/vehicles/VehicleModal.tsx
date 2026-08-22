@@ -23,9 +23,11 @@ export const VehicleModal: React.FC<VehicleModalProps> = ({
     fuelType: 'Diesel',
     driverName: '',
     driverPhone: '',
-    baseMonthlyRate: 35000,
-    ratePerKm: 14,
-    ratePerHour: 120,
+    defaultDailyKm: 100,
+    defaultDailyHours: 10,
+    baseMonthlyRate: 40000,
+    ratePerKm: 18,
+    ratePerHour: 90,
     nightChargeRate: 350,
     status: 'Active',
     notes: '',
@@ -40,6 +42,8 @@ export const VehicleModal: React.FC<VehicleModalProps> = ({
         fuelType: initialVehicle.fuelType,
         driverName: initialVehicle.driverName,
         driverPhone: initialVehicle.driverPhone,
+        defaultDailyKm: initialVehicle.defaultDailyKm || 100,
+        defaultDailyHours: initialVehicle.defaultDailyHours || 10,
         baseMonthlyRate: initialVehicle.baseMonthlyRate,
         ratePerKm: initialVehicle.ratePerKm,
         ratePerHour: initialVehicle.ratePerHour,
@@ -55,9 +59,11 @@ export const VehicleModal: React.FC<VehicleModalProps> = ({
         fuelType: 'Diesel',
         driverName: '',
         driverPhone: '',
-        baseMonthlyRate: 35000,
-        ratePerKm: 14,
-        ratePerHour: 120,
+        defaultDailyKm: 100,
+        defaultDailyHours: 10,
+        baseMonthlyRate: 40000,
+        ratePerKm: 18,
+        ratePerHour: 90,
         nightChargeRate: 350,
         status: 'Active',
         notes: '',
@@ -173,8 +179,34 @@ export const VehicleModal: React.FC<VehicleModalProps> = ({
 
           <div className="md:col-span-2 pt-2 border-t border-slate-100">
             <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800 mb-2">
-              Default Billing Rates (Auto-fills in new trips & invoices)
+              Default Daily Package & Billing Rates (Auto-fills in Month Log Sheet & Invoices)
             </h4>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Default Daily Base Run (KM / Day)
+            </label>
+            <input
+              type="number"
+              value={formData.defaultDailyKm}
+              onChange={e => setFormData({ ...formData, defaultDailyKm: Number(e.target.value) })}
+              placeholder="e.g. 100"
+              className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono font-bold"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Default Daily Base Duty (Hours / Day)
+            </label>
+            <input
+              type="number"
+              value={formData.defaultDailyHours}
+              onChange={e => setFormData({ ...formData, defaultDailyHours: Number(e.target.value) })}
+              placeholder="e.g. 10"
+              className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono font-bold"
+            />
           </div>
 
           <div>

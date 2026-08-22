@@ -40,6 +40,8 @@ export interface Vehicle {
   fuelType: FuelType;
   driverName: string;
   driverPhone: string;
+  defaultDailyKm?: number;
+  defaultDailyHours?: number;
   baseMonthlyRate: number;
   ratePerKm: number;
   ratePerHour: number;
