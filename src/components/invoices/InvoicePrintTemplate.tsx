@@ -14,8 +14,14 @@ export const InvoicePrintTemplate: React.FC<InvoicePrintTemplateProps> = ({
   return (
     <div 
       id={`invoice-print-doc-${invoice.id}`}
-      className="bg-white text-slate-900 p-8 md:p-10 font-sans max-w-[800px] mx-auto border border-slate-200 shadow-sm print:border-none print:shadow-none print:p-0 print:m-0"
-      style={{ minHeight: '1050px' }}
+      className="bg-white text-slate-900 p-8 md:p-10 font-sans mx-auto border border-slate-200 shadow-sm print:border-none print:shadow-none print:p-0 print:m-0 shrink-0"
+      style={{ 
+        width: '794px',
+        minWidth: '794px',
+        maxWidth: '794px',
+        minHeight: '1050px',
+        boxSizing: 'border-box'
+      }}
     >
       {/* Top Legal Header */}
       <div className="flex justify-between items-start border-b-2 border-slate-900 pb-5 mb-5">

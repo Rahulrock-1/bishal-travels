@@ -268,7 +268,7 @@ export const InvoiceViewModal: React.FC = () => {
         </div>
 
         {/* Live Document Preview Container */}
-        <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-100 p-4 md:p-6 shadow-inner flex justify-center">
+        <div className="border border-slate-200 rounded-2xl overflow-x-auto bg-slate-100 p-2 sm:p-4 md:p-6 shadow-inner flex justify-start md:justify-center">
           {/* FORMAT 1: EXACT MATCH TO JULU BISHAL.pdf */}
           {templateFormat === 'bishal-official' && (
             <BishalMonthlyInvoicePdfTemplate

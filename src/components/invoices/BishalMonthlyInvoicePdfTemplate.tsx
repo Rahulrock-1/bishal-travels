@@ -59,13 +59,16 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
   return (
     <div
       id={elementId}
-      className="bg-white text-black font-sans mx-auto p-4 sm:p-8 max-w-[850px] shadow-sm border border-slate-300 print:border-none print:shadow-none print:p-0 print:m-0"
+      className="bg-white text-black font-sans mx-auto p-4 sm:p-6 shadow-sm border border-slate-300 print:border-none print:shadow-none print:p-0 print:m-0 shrink-0"
       style={{
-        width: '100%',
-        minHeight: '1100px',
+        width: '794px',
+        minWidth: '794px',
+        maxWidth: '794px',
+        minHeight: '1120px',
         backgroundColor: '#ffffff',
         color: '#000000',
         fontFamily: '"Times New Roman", Times, Georgia, serif',
+        boxSizing: 'border-box',
       }}
     >
       {/* Outer Enclosing Box matching JULU BISHAL.pdf */}
