@@ -167,6 +167,9 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   // Generate rows for all days in the selected month & year
   useEffect(() => {
     const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    const veh = vehicles.find(v => v.id === selectedVehicleId) || vehicles[0];
+    const carDefaultKm = veh?.defaultDailyKm || defaultBaseKm || 100;
+    const carDefaultHours = veh?.defaultDailyHours || defaultDutyHours || 10;
     
     // Check if there are existing duty slips for this vehicle in this month
     const monthPrefix = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
@@ -188,11 +191,13 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
       if (existing) {
         const isOff = existing.totalKm === 0 && (existing.route.toLowerCase().includes('off') || existing.route.toLowerCase().includes('garage'));
-        const extraHrs = Math.max(0, (existing.totalHours || 0) - defaultDutyHours);
+        const kmVal = isOff ? 0 : (existing.totalKm > 0 ? existing.totalKm : carDefaultKm);
+        const hrsVal = isOff ? 0 : (existing.totalHours > 0 ? existing.totalHours : carDefaultHours);
+        const extraHrs = Math.max(0, hrsVal - defaultDutyHours);
         const otCost = extraHrs * overtimeRatePerHour;
         const dayTotal = isOff ? 0 : computeRowTotal(
-          existing.totalKm,
-          existing.totalHours,
+          kmVal,
+          hrsVal,
           existing.nightCharges,
           existing.parkingCharges,
           existing.tollCharges,
@@ -212,11 +217,11 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           dutySlipNo: existing.dutySlipNo || `DS-${selectedYear}-${String(day).padStart(2, '0')}`,
           route: existing.route || (isSunday ? 'Sunday Off / Garage Maintenance' : 'Local Corporate Movement'),
           startKm: existing.startKm,
-          endKm: existing.endKm,
-          totalKm: existing.totalKm,
-          startTime: existing.startTime || (isSunday ? '' : '08:30'),
-          endTime: existing.endTime || (isSunday ? '' : '18:30'),
-          totalHours: existing.totalHours || 0,
+          endKm: existing.startKm + kmVal,
+          totalKm: kmVal,
+          startTime: existing.startTime || (isOff ? '' : '08:30'),
+          endTime: existing.endTime || (isOff ? '' : '18:30'),
+          totalHours: hrsVal,
           extraHours: extraHrs,
           overtimeCharges: otCost,
           nightCharges: existing.nightCharges || 0,
@@ -226,27 +231,20 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           dayTotalAmount: dayTotal,
           notes: existing.notes || '',
         });
-        rollingKm = existing.endKm;
+        rollingKm = existing.startKm + kmVal;
       } else {
         const isOff = isSunday;
         const start = rollingKm;
-        const run = isOff ? 0 : dailyAvgKm;
+        const run = isOff ? 0 : carDefaultKm;
         const end = start + run;
         rollingKm = end;
+        const hrsVal = isOff ? 0 : carDefaultHours;
 
-        const metrics = calculateDutySlipMetrics({
-          startKm: start,
-          endKm: end,
-          startTime: isOff ? '' : '08:30',
-          endTime: isOff ? '' : '18:30',
-          baseDutyHours: defaultDutyHours
-        });
-
-        const extraHrs = Math.max(0, metrics.totalHours - defaultDutyHours);
+        const extraHrs = isOff ? 0 : Math.max(0, hrsVal - defaultDutyHours);
         const otCost = isOff ? 0 : extraHrs * overtimeRatePerHour;
         const dayTotal = isOff ? 0 : computeRowTotal(
-          metrics.totalKm,
-          metrics.totalHours,
+          run,
+          hrsVal,
           0,
           0,
           0,
@@ -267,11 +265,11 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           route: isOff ? 'Sunday Off / Garage Maintenance' : 'Local Corporate Movement & Office Duty',
           startKm: start,
           endKm: end,
-          totalKm: isOff ? 0 : metrics.totalKm,
+          totalKm: run,
           startTime: isOff ? '' : '08:30',
           endTime: isOff ? '' : '18:30',
-          totalHours: isOff ? 0 : metrics.totalHours,
-          extraHours: isOff ? 0 : extraHrs,
+          totalHours: hrsVal,
+          extraHours: extraHrs,
           overtimeCharges: otCost,
           nightCharges: 0,
           parkingCharges: 0,
@@ -479,8 +477,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       const copy = [...prev];
       const row = copy[index];
       const isOff = !row.isOffDay;
-      const totalKm = isOff ? 0 : dailyAvgKm;
-      const totalHrs = isOff ? 0 : 10;
+      const totalKm = isOff ? 0 : (defaultBaseKm || 100);
+      const totalHrs = isOff ? 0 : (defaultDutyHours || 10);
       const extraHrs = isOff ? 0 : Math.max(0, totalHrs - defaultDutyHours);
       const otCost = extraHrs * overtimeRatePerHour;
       const total = isOff ? 0 : computeRowTotal(
@@ -501,7 +499,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         isOffDay: isOff,
         route: isOff ? 'Day Off / Garage Maintenance' : 'Local Corporate Movement',
         startKm: row.startKm,
-        endKm: isOff ? row.startKm : row.startKm + dailyAvgKm,
+        endKm: isOff ? row.startKm : row.startKm + totalKm,
         totalKm: totalKm,
         startTime: isOff ? '' : '08:30',
         endTime: isOff ? '' : '18:30',
@@ -688,7 +686,11 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
             <input
               type="number"
               value={defaultBaseKm}
-              onChange={e => setDefaultBaseKm(Number(e.target.value))}
+              onChange={e => {
+                const val = Number(e.target.value);
+                setDefaultBaseKm(val);
+                setDailyAvgKm(val);
+              }}
               className="w-full px-2 py-1.5 bg-slate-800 text-amber-300 border border-slate-700 rounded-lg font-mono font-black text-sm"
               placeholder="e.g. 100"
             />
