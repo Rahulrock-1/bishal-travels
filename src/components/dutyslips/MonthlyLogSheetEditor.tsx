@@ -369,10 +369,12 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     });
   };
 
-  // Auto Chain all KM entries from Day 1 to Day N
+  // Auto Chain all KM entries from Day 1 to Day N using default package
   const handleChainOdometer = () => {
     setRows(prev => {
       let currentKm = initialStartKm;
+      const targetKm = defaultBaseKm || 100;
+      const targetHours = defaultDutyHours || 10;
       return prev.map(row => {
         if (row.isOffDay) {
           return {
@@ -387,15 +389,16 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           };
         }
         const start = currentKm;
-        const end = start + (row.totalKm > 0 ? row.totalKm : dailyAvgKm);
-        const km = end - start;
+        const km = row.totalKm > 0 ? row.totalKm : targetKm;
+        const end = start + km;
         currentKm = end;
         
-        const extraHrs = Math.max(0, (row.totalHours || 0) - defaultDutyHours);
+        const hrs = row.totalHours > 0 ? row.totalHours : targetHours;
+        const extraHrs = Math.max(0, hrs - defaultDutyHours);
         const otCost = extraHrs * overtimeRatePerHour;
         const total = computeRowTotal(
           km,
-          row.totalHours,
+          hrs,
           row.nightCharges,
           row.parkingCharges,
           row.tollCharges,
@@ -411,6 +414,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           startKm: start,
           endKm: end,
           totalKm: km,
+          totalHours: hrs,
           extraHours: extraHrs,
           overtimeCharges: otCost,
           dayTotalAmount: total
@@ -419,30 +423,25 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     });
   };
 
-  // Fill all 30 days as active continuous duty
+  // Fill all 30 days as active continuous duty with car's default package (e.g. 100 KM)
   const handleFillAllDaysActive = (includeSundays = true) => {
     setRows(prev => {
       let currentKm = initialStartKm;
+      const targetKm = defaultBaseKm || 100;
+      const targetHours = defaultDutyHours || 10;
       return prev.map(row => {
         const isOff = !includeSundays && row.isSunday;
         const start = currentKm;
-        const run = isOff ? 0 : dailyAvgKm;
+        const run = isOff ? 0 : targetKm;
         const end = start + run;
         currentKm = end;
+        const hrs = isOff ? 0 : targetHours;
 
-        const metrics = calculateDutySlipMetrics({
-          startKm: start,
-          endKm: end,
-          startTime: isOff ? '' : '08:30',
-          endTime: isOff ? '' : '18:30',
-          baseDutyHours: defaultDutyHours
-        });
-
-        const extraHrs = isOff ? 0 : Math.max(0, metrics.totalHours - defaultDutyHours);
+        const extraHrs = isOff ? 0 : Math.max(0, hrs - defaultDutyHours);
         const otCost = extraHrs * overtimeRatePerHour;
         const total = isOff ? 0 : computeRowTotal(
-          metrics.totalKm,
-          metrics.totalHours,
+          run,
+          hrs,
           0,
           0,
           0,
@@ -459,16 +458,71 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           route: isOff ? 'Sunday Off / Garage Day' : 'Local Corporate Movement & Office Duty',
           startKm: start,
           endKm: end,
-          totalKm: isOff ? 0 : run,
+          totalKm: run,
           startTime: isOff ? '' : '08:30',
           endTime: isOff ? '' : '18:30',
-          totalHours: isOff ? 0 : metrics.totalHours,
+          totalHours: hrs,
           extraHours: extraHrs,
           overtimeCharges: otCost,
           dayTotalAmount: total
         };
       });
     });
+  };
+
+  // Apply car's default package (e.g. 100 KM & 10h) to all active duty rows
+  const handleApplyCarPackageToAllRows = () => {
+    const targetKm = defaultBaseKm || 100;
+    const targetHours = defaultDutyHours || 10;
+    let currentKm = initialStartKm;
+
+    setRows(prev => prev.map(row => {
+      if (row.isOffDay) {
+        return {
+          ...row,
+          startKm: currentKm,
+          endKm: currentKm,
+          totalKm: 0,
+          totalHours: 0,
+          extraHours: 0,
+          overtimeCharges: 0,
+          dayTotalAmount: 0
+        };
+      }
+
+      const start = currentKm;
+      const end = start + targetKm;
+      currentKm = end;
+
+      const extraHrs = Math.max(0, targetHours - defaultDutyHours);
+      const otCost = extraHrs * overtimeRatePerHour;
+      const total = computeRowTotal(
+        targetKm,
+        targetHours,
+        Number(row.nightCharges) || 0,
+        Number(row.parkingCharges) || 0,
+        Number(row.tollCharges) || 0,
+        Number(row.driverBatta) || 0,
+        ratePerKm,
+        overtimeRatePerHour,
+        defaultDutyHours,
+        defaultBaseKm
+      );
+
+      return {
+        ...row,
+        startKm: start,
+        endKm: end,
+        totalKm: targetKm,
+        totalHours: targetHours,
+        extraHours: extraHrs,
+        overtimeCharges: otCost,
+        dayTotalAmount: total
+      };
+    }));
+
+    setSaveSuccessMsg(`Applied car default run (${targetKm} KM / ${targetHours}h) to all active rows!`);
+    setTimeout(() => setSaveSuccessMsg(null), 3000);
   };
 
   // Toggle Day Off (e.g. Sunday or holiday)
@@ -787,13 +841,22 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
             title="Automatically connects each day's Start KM to the previous day's End KM"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Auto-Chain KM Sequence</span>
+            <span>Auto-Chain KM</span>
+          </button>
+
+          <button
+            onClick={handleApplyCarPackageToAllRows}
+            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 rounded-lg font-bold flex items-center gap-1.5 transition-colors"
+            title={`Set every active day to car's default ${defaultBaseKm} KM run`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
+            <span>⚡ Apply {defaultBaseKm} KM Default</span>
           </button>
 
           <button
             onClick={() => handleFillAllDaysActive(true)}
             className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg font-bold flex items-center gap-1.5 transition-colors"
-            title={`Fill all 30/31 days with ${dailyAvgKm} KM run`}
+            title={`Fill all 30/31 days with ${defaultBaseKm} KM run`}
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-700" />
             <span>⚡ Fill All 30 Days Active</span>
