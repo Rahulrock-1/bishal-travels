@@ -278,6 +278,12 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         row.overtimeCharges = metrics.extraHours * overtimeRatePerHour;
       }
 
+      if (field === 'totalKm') {
+        const kmVal = Number(val) || 0;
+        row.totalKm = kmVal;
+        row.endKm = (row.startKm || 0) + kmVal;
+      }
+
       if (field === 'overtimeCharges') {
         row.overtimeCharges = Number(val) || 0;
       }
@@ -808,9 +814,16 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       />
                     </td>
 
-                    {/* Total KM Calculated */}
-                    <td className="py-1.5 px-1.5 text-center border-r border-slate-200 font-mono font-black text-emerald-950 text-xs">
-                      {isOff ? '-' : `${row.totalKm}`}
+                    {/* Total KM Run (Directly Editable) */}
+                    <td className="py-1.5 px-1 border-r border-slate-200 text-center">
+                      <input
+                        type="number"
+                        value={row.totalKm || ''}
+                        onChange={e => handleRowChange(idx, 'totalKm', e.target.value)}
+                        placeholder="KM"
+                        className="w-full px-1 py-1 text-xs font-mono font-black text-center border border-emerald-300 rounded bg-emerald-50 text-emerald-950 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                        disabled={isOff}
+                      />
                     </td>
 
                     {/* Start Time */}
