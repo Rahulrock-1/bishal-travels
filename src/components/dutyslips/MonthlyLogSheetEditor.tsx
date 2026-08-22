@@ -14,12 +14,15 @@ import {
   RotateCcw,
   Layers,
   ArrowRight,
-  Info
+  Info,
+  Download
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DutySlip } from '../../types';
 import { calculateDutySlipMetrics } from '../../utils/calculations';
 import { formatCurrency, formatKm, formatDate } from '../../utils/formatters';
+import { BishalMonthlyInvoicePdfTemplate } from '../invoices/BishalMonthlyInvoicePdfTemplate';
+import { downloadInvoiceAsPdf } from '../../utils/pdfGenerator';
 
 interface DailyRowData {
   dayNumber: number;
@@ -45,6 +48,7 @@ interface DailyRowData {
 
 export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const { 
+    company,
     vehicles, 
     clients, 
     dutySlips, 
@@ -767,10 +771,25 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <button
+            onClick={() => {
+              handleSaveAllSlips();
+              downloadInvoiceAsPdf(
+                'bishal-sheet-direct-pdf-render',
+                `${company.businessName || 'BISHAL_TRAVELS'}_${selectedVeh?.regNumber || 'Vehicle'}_${selectedMonthName.replace(/\s+/g, '_')}`
+              );
+            }}
+            className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 shadow-sm transition-all hover:scale-105"
+            title="Download PDF in official BISHAL TRAVELS format matching JULU BISHAL.pdf"
+          >
+            <Download className="w-4 h-4" />
+            <span>Download Official PDF (BISHAL Style)</span>
+          </button>
+
           <button
             onClick={handleSaveAllSlips}
-            className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm transition-colors"
+            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm transition-colors"
           >
             <Save className="w-4 h-4 text-emerald-400" />
             <span>Save Monthly Log</span>
@@ -786,6 +805,34 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
             <span>Proceed to Monthly Invoice</span>
             <ArrowRight className="w-4 h-4" />
           </button>
+        </div>
+      </div>
+
+      {/* Hidden printable template container for direct 1-click PDF download */}
+      <div className="hidden">
+        <div id="bishal-sheet-direct-pdf-render">
+          {selectedVeh && (
+            <BishalMonthlyInvoicePdfTemplate
+              company={company}
+              vehicle={selectedVeh}
+              monthTitle={selectedMonthName}
+              invoiceDateStr={`31-${String(selectedMonth + 1).padStart(2, '0')}-${selectedYear}`}
+              rows={rows.map(r => ({
+                date: formatDate(r.dateStr, 'dd-MM-yyyy'),
+                hours: r.totalHours > 0 ? r.totalHours : '',
+                km: r.totalKm > 0 ? r.totalKm : '',
+                parkingCharge: Number(r.parkingCharges) || 0,
+                nightCharge: Number(r.nightCharges) || 0,
+                totalAmount: 0,
+              }))}
+              totalHours={Math.round(totalMonthHours)}
+              totalKm={totalMonthKm}
+              totalParking={totalMonthParking + totalMonthNight + totalMonthToll}
+              grandTotalAmount={0}
+              client={selectedCli}
+              elementId="bishal-sheet-direct-pdf-render"
+            />
+          )}
         </div>
       </div>
     </div>
