@@ -14,6 +14,7 @@ export interface CompanyProfile {
   businessName: string;
   tagline: string;
   tradeLicenseNo: string;
+  vendorId?: string;
   gstin: string;
   pan: string;
   address: string;

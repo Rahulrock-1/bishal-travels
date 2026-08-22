@@ -285,9 +285,22 @@ export const SettingsModal: React.FC = () => {
                   type="text"
                   value={formData.tradeLicenseNo}
                   onChange={e => handleChange('tradeLicenseNo', e.target.value)}
-                  placeholder="e.g. TR/KMC/778291/2024"
+                  placeholder="e.g. 1711 or TR/KMC/778291/2024"
                   className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono font-medium"
                   required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Vendor ID / Vendor Code
+                </label>
+                <input
+                  type="text"
+                  value={formData.vendorId || ''}
+                  onChange={e => handleChange('vendorId', e.target.value)}
+                  placeholder="e.g. 10482 or V-9088"
+                  className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono font-bold"
                 />
               </div>
 

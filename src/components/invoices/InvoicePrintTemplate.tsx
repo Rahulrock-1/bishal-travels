@@ -38,6 +38,11 @@ export const InvoicePrintTemplate: React.FC<InvoicePrintTemplateProps> = ({
             <span className="px-2 py-0.5 bg-slate-100 text-slate-900 font-mono font-bold rounded border border-slate-300">
               Trade License: {invoice.tradeLicenseNo || company.tradeLicenseNo}
             </span>
+            {company.vendorId && (
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-900 font-mono font-bold rounded border border-slate-300">
+                Vendor ID: {company.vendorId}
+              </span>
+            )}
             {invoice.companyGstin && (
               <span className="px-2 py-0.5 bg-slate-100 text-slate-900 font-mono font-bold rounded border border-slate-300">
                 GSTIN: {invoice.companyGstin}

@@ -5,6 +5,7 @@ export const initialCompanyProfile: CompanyProfile = {
   businessName: 'BISHAL TRAVELS',
   tagline: 'Car Rental & Commercial Fleet Operations',
   tradeLicenseNo: '1711',
+  vendorId: '10482',
   gstin: '',
   pan: 'BQNPP4333F',
   address: 'VILL - KALMIKHALI, P.O - ANDHARMANIK, P.S - BISHNUPUR, DIST - SOUTH 24 PARGANAS, PIN - 743503, STATE - WEST BENGAL',

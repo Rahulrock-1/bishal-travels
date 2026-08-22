@@ -82,9 +82,12 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
 
         {/* 3-Column Header Section */}
         <div className="grid grid-cols-12 border-b border-black text-xs">
-          {/* Left Box: TRADE LICENCE & VEHICLE NO */}
-          <div className="col-span-3 p-3 border-r border-black flex flex-col justify-center space-y-1 text-[11px] font-bold">
+          {/* Left Box: TRADE LICENCE, VENDOR ID & VEHICLE NO */}
+          <div className="col-span-3 p-3 border-r border-black flex flex-col justify-center space-y-0.5 text-[11px] font-bold">
             <div>TRADE LICENCE - {company.tradeLicenseNo || '1711'}</div>
+            {company.vendorId && (
+              <div>VENDOR ID - {company.vendorId}</div>
+            )}
             <div>VEHICLE NO. {vehicle.regNumber.replace(/\s+/g, '')}</div>
           </div>
 
