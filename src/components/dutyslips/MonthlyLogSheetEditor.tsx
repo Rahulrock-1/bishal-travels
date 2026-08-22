@@ -19,7 +19,8 @@ import {
   Eye,
   Printer,
   X,
-  DollarSign
+  DollarSign,
+  Filter
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DutySlip } from '../../types';
@@ -75,14 +76,17 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   
   // Base Contract Package Configuration (e.g. 100 KM & 10 Hours @ ₹18/KM, OT ₹90/hr)
   const currentVeh = vehicles.find(v => v.id === selectedVehicleId) || vehicles[0];
-  const [defaultBaseKm, setDefaultBaseKm] = useState<number>(100); // Default daily base package KM (e.g. 100 KM)
-  const [defaultDutyHours, setDefaultDutyHours] = useState<number>(10); // Default daily base package Hours (e.g. 10 Hours)
+  const [defaultBaseKm, setDefaultBaseKm] = useState<number>(currentVeh?.defaultDailyKm || 100);
+  const [defaultDutyHours, setDefaultDutyHours] = useState<number>(currentVeh?.defaultDailyHours || 10);
   const [ratePerKm, setRatePerKm] = useState<number>(currentVeh?.ratePerKm || 18);
   const [overtimeRatePerHour, setOvertimeRatePerHour] = useState<number>(currentVeh?.ratePerHour || 90);
 
+  // Active vs Inactive filter (Default: 'active')
+  const [statusFilter, setStatusFilter] = useState<'active' | 'all' | 'inactive'>('active');
+
   // Starting base odometer for Day 1
   const [initialStartKm, setInitialStartKm] = useState<number>(14000);
-  const [dailyAvgKm, setDailyAvgKm] = useState<number>(100);
+  const [dailyAvgKm, setDailyAvgKm] = useState<number>(currentVeh?.defaultDailyKm || 100);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
@@ -166,7 +170,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       const existing = slipMap.get(dateStr);
 
       if (existing) {
-        const isOff = existing.totalKm === 0 && existing.route.toLowerCase().includes('off');
+        const isOff = existing.totalKm === 0 && (existing.route.toLowerCase().includes('off') || existing.route.toLowerCase().includes('garage'));
         const extraHrs = Math.max(0, (existing.totalHours || 0) - defaultDutyHours);
         const otCost = extraHrs * overtimeRatePerHour;
         const dayTotal = isOff ? 0 : computeRowTotal(
@@ -505,7 +509,16 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const totalMonthToll = rows.reduce((sum, r) => sum + (Number(r.tollCharges) || 0), 0);
   const totalMonthBatta = rows.reduce((sum, r) => sum + (Number(r.driverBatta) || 0), 0);
   const grandTotalAmount = rows.reduce((sum, r) => sum + (Number(r.dayTotalAmount) || 0), 0);
-  const totalWorkingDays = rows.filter(r => !r.isOffDay && r.totalKm > 0).length;
+  const activeCount = rows.filter(r => !r.isOffDay && (r.totalKm > 0 || r.totalHours > 0 || r.dayTotalAmount > 0)).length;
+  const inactiveCount = rows.length - activeCount;
+
+  // Filtered rows for the view (Default: 'active' duties only)
+  const displayedRows = rows.map((row, realIndex) => ({ row, realIndex })).filter(({ row }) => {
+    const isActive = !row.isOffDay && (row.totalKm > 0 || row.totalHours > 0 || row.dayTotalAmount > 0);
+    if (statusFilter === 'active') return isActive;
+    if (statusFilter === 'inactive') return !isActive;
+    return true; // 'all'
+  });
 
   // Save all rows to AppContext duty slips
   const handleSaveAllSlips = () => {
@@ -721,60 +734,110 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         </div>
       )}
 
-      {/* Auto-Fill & Quick Tools Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-700">Day 1 Start KM:</span>
+      {/* View Filter (Active / Inactive) & Quick Tools Bar */}
+      <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
+        {/* Active / Inactive / All Filter Segmented Control */}
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('active')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all ${
+              statusFilter === 'active'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <span>Active Duties</span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-black ${
+              statusFilter === 'active' ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {activeCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all ${
+              statusFilter === 'all'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <span>All Days</span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-black ${
+              statusFilter === 'all' ? 'bg-slate-700 text-slate-200' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {rows.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('inactive')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all ${
+              statusFilter === 'inactive'
+                ? 'bg-rose-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <span>Off / Inactive</span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-black ${
+              statusFilter === 'inactive' ? 'bg-rose-800 text-rose-100' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {inactiveCount}
+            </span>
+          </button>
+        </div>
+
+        {/* Quick Tools */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-slate-700">Day 1 KM:</span>
             <input
               type="number"
               value={initialStartKm}
               onChange={e => setInitialStartKm(Number(e.target.value))}
-              className="w-24 px-2 py-1 border border-slate-300 rounded-lg font-mono font-bold"
+              className="w-20 px-2 py-1 border border-slate-300 rounded-lg font-mono font-bold"
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-700">Default Run/Day:</span>
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-slate-700">Run:</span>
             <input
               type="number"
               value={dailyAvgKm}
               onChange={e => setDailyAvgKm(Number(e.target.value))}
-              className="w-20 px-2 py-1 border border-slate-300 rounded-lg font-mono font-bold"
+              className="w-16 px-2 py-1 border border-slate-300 rounded-lg font-mono font-bold"
             />
-            <span className="text-slate-500">KM</span>
+            <span className="text-slate-500 font-semibold">KM</span>
           </div>
 
           <button
             onClick={handleChainOdometer}
-            className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-lg font-bold flex items-center gap-1.5 transition-colors"
+            className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-lg font-bold flex items-center gap-1 transition-colors"
             title="Automatically connects each day's Start KM to the previous day's End KM"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Auto-Chain KM Sequence</span>
+            <span>Chain KM</span>
           </button>
 
           <button
             onClick={() => handleFillAllDaysActive(true)}
-            className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg font-bold flex items-center gap-1.5 transition-colors"
+            className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg font-bold flex items-center gap-1 transition-colors"
             title={`Fill all 30/31 days with ${dailyAvgKm} KM run`}
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-700" />
-            <span>⚡ Fill All 30 Days Active</span>
+            <span>⚡ Fill Active</span>
           </button>
 
           <button
             onClick={() => handleFillAllDaysActive(false)}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-bold flex items-center gap-1.5 transition-colors"
+            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-bold flex items-center gap-1 transition-colors"
             title="Fill working days (Mon-Sat) and mark Sundays as Off"
           >
-            <span>Fill Mon-Sat (Sundays Off)</span>
+            <span>Sundays Off</span>
           </button>
-        </div>
-
-        <div className="flex items-center gap-2 text-slate-500 text-[11px]">
-          <Info className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Base: {defaultBaseKm} KM & {defaultDutyHours}h = ₹{defaultBaseKm * ratePerKm}. Extra: Takes highest of Extra KM (@ ₹{ratePerKm}) vs Extra OT (@ ₹{overtimeRatePerHour}/h).</span>
         </div>
       </div>
 
@@ -802,7 +865,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 font-medium text-slate-800">
-              {rows.map((row, idx) => {
+              {displayedRows.map(({ row, realIndex }) => {
                 const isSun = row.isSunday;
                 const isOff = row.isOffDay;
                 const hasOt = row.extraHours > 0;
@@ -834,7 +897,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       <input
                         type="text"
                         value={row.dutySlipNo}
-                        onChange={e => handleRowChange(idx, 'dutySlipNo', e.target.value)}
+                        onChange={e => handleRowChange(realIndex, 'dutySlipNo', e.target.value)}
                         className="w-full px-1 py-1 text-[11px] font-mono border border-slate-200 rounded bg-white"
                       />
                     </td>
@@ -845,7 +908,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                         <input
                           type="text"
                           value={row.route}
-                          onChange={e => handleRowChange(idx, 'route', e.target.value)}
+                          onChange={e => handleRowChange(realIndex, 'route', e.target.value)}
                           className={`w-full px-2 py-1 text-xs border border-slate-200 rounded ${
                             isOff ? 'bg-slate-200/60 text-slate-500 italic' : 'bg-white font-medium'
                           }`}
@@ -853,7 +916,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                         />
                         <button
                           type="button"
-                          onClick={() => handleToggleOffDay(idx)}
+                          onClick={() => handleToggleOffDay(realIndex)}
                           className={`px-1.5 py-1 rounded text-[10px] font-bold shrink-0 transition-colors ${
                             isOff 
                               ? 'bg-rose-100 text-rose-800 border border-rose-200' 
@@ -871,7 +934,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       <input
                         type="number"
                         value={row.startKm}
-                        onChange={e => handleRowChange(idx, 'startKm', e.target.value)}
+                        onChange={e => handleRowChange(realIndex, 'startKm', e.target.value)}
                         className="w-full px-1 py-1 text-xs font-mono font-bold text-center border border-slate-200 rounded bg-white"
                         disabled={isOff}
                       />
@@ -882,7 +945,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       <input
                         type="number"
                         value={row.endKm}
-                        onChange={e => handleRowChange(idx, 'endKm', e.target.value)}
+                        onChange={e => handleRowChange(realIndex, 'endKm', e.target.value)}
                         className="w-full px-1 py-1 text-xs font-mono font-bold text-center border border-slate-200 rounded bg-white"
                         disabled={isOff}
                       />
@@ -894,7 +957,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                         <input
                           type="number"
                           value={row.totalKm || ''}
-                          onChange={e => handleRowChange(idx, 'totalKm', e.target.value)}
+                          onChange={e => handleRowChange(realIndex, 'totalKm', e.target.value)}
                           placeholder="KM"
                           className="w-full px-1 py-1 text-xs font-mono font-black text-center border border-emerald-300 rounded bg-emerald-50 text-emerald-950 focus:bg-white focus:ring-2 focus:ring-emerald-500"
                           disabled={isOff}
@@ -912,7 +975,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       <input
                         type="time"
                         value={row.startTime}
-                        onChange={e => handleRowChange(idx, 'startTime', e.target.value)}
+                        onChange={e => handleRowChange(realIndex, 'startTime', e.target.value)}
                         className="w-full px-0.5 py-1 text-[11px] font-mono text-center border border-slate-200 rounded bg-white"
                         disabled={isOff}
                       />
@@ -923,7 +986,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       <input
                         type="time"
                         value={row.endTime}
-                        onChange={e => handleRowChange(idx, 'endTime', e.target.value)}
+                        onChange={e => handleRowChange(realIndex, 'endTime', e.target.value)}
                         className="w-full px-0.5 py-1 text-[11px] font-mono text-center border border-slate-200 rounded bg-white"
                         disabled={isOff}
                       />
@@ -936,7 +999,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                           type="number"
                           step="0.5"
                           value={row.totalHours || ''}
-                          onChange={e => handleRowChange(idx, 'totalHours', e.target.value)}
+                          onChange={e => handleRowChange(realIndex, 'totalHours', e.target.value)}
                           placeholder="Hrs"
                           className="w-full px-1 py-1 text-xs font-mono font-bold text-center border border-slate-300 rounded bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500"
                           disabled={isOff}
@@ -954,7 +1017,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       <input
                         type="number"
                         value={row.nightCharges || ''}
-                        onChange={e => handleRowChange(idx, 'nightCharges', e.target.value)}
+                        onChange={e => handleRowChange(realIndex, 'nightCharges', e.target.value)}
                         placeholder="₹"
                         className="w-full px-1 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-amber-800 font-bold"
                         disabled={isOff}
@@ -966,7 +1029,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       <input
                         type="number"
                         value={row.parkingCharges || ''}
-                        onChange={e => handleRowChange(idx, 'parkingCharges', e.target.value)}
+                        onChange={e => handleRowChange(realIndex, 'parkingCharges', e.target.value)}
                         placeholder="₹"
                         className="w-full px-1 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-blue-800 font-bold"
                         disabled={isOff}
@@ -978,7 +1041,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       <input
                         type="number"
                         value={row.tollCharges || ''}
-                        onChange={e => handleRowChange(idx, 'tollCharges', e.target.value)}
+                        onChange={e => handleRowChange(realIndex, 'tollCharges', e.target.value)}
                         placeholder="₹"
                         className="w-full px-1 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-blue-800 font-bold"
                         disabled={isOff}
@@ -990,7 +1053,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       <input
                         type="number"
                         value={row.driverBatta || ''}
-                        onChange={e => handleRowChange(idx, 'driverBatta', e.target.value)}
+                        onChange={e => handleRowChange(realIndex, 'driverBatta', e.target.value)}
                         placeholder="₹"
                         className="w-full px-1 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-purple-800 font-bold"
                         disabled={isOff}
@@ -1013,12 +1076,22 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                   </tr>
                 );
               })}
+
+              {displayedRows.length === 0 && (
+                <tr>
+                  <td colSpan={15} className="py-10 text-center text-slate-500 italic text-sm">
+                    {statusFilter === 'active' 
+                      ? 'No active duty days found. Click "⚡ Fill Active" or switch to "All Days" to add duty logs.' 
+                      : 'No inactive / off days found for this month.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
             {/* Table Footer with Monthly Aggregate Sums */}
             <tfoot className="sticky bottom-0 z-20 bg-slate-900 text-white font-bold border-t-2 border-slate-700 text-xs">
               <tr>
                 <td colSpan={3} className="py-3 px-3 uppercase text-[10px] tracking-wider text-emerald-400">
-                  Monthly Total ({totalWorkingDays} Duty Days):
+                  Monthly Total ({activeCount} Duty Days):
                 </td>
                 <td colSpan={2} className="py-3 px-2 text-right text-slate-400 font-mono text-[11px]">
                   Total Distance:
