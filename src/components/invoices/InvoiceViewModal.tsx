@@ -58,6 +58,7 @@ export const InvoiceViewModal: React.FC = () => {
     rows: DailyReportRow[];
     totalHours: number;
     totalKm: number;
+    totalNight: number;
     totalParking: number;
   } => {
     // Parse billing month (e.g. "July 2026", "2026-07")
@@ -80,6 +81,7 @@ export const InvoiceViewModal: React.FC = () => {
     const rows: DailyReportRow[] = [];
     let sumHours = 0;
     let sumKm = 0;
+    let sumNight = 0;
     let sumParking = 0;
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -92,28 +94,26 @@ export const InvoiceViewModal: React.FC = () => {
       if (slip) {
         const hours = slip.totalHours || 0;
         const km = slip.totalKm || 0;
-        const parking = (slip.parkingCharges || 0) + (slip.tollCharges || 0) + (slip.nightCharges || 0);
+        const night = slip.nightCharges || 0;
+        const parking = (slip.parkingCharges || 0) + (slip.tollCharges || 0);
+        const isOffDay = km === 0 && (slip.route?.toLowerCase().includes('off') || slip.route?.toLowerCase().includes('garage'));
 
-        sumHours += hours;
-        sumKm += km;
-        sumParking += parking;
+        if (!isOffDay && (km > 0 || hours > 0 || night > 0 || parking > 0)) {
+          sumHours += hours;
+          sumKm += km;
+          sumNight += night;
+          sumParking += parking;
 
-        rows.push({
-          date: displayDate,
-          hours: hours > 0 ? hours : '',
-          km: km > 0 ? km : '',
-          parkingCharge: parking,
-          totalAmount: 0, // Daily rate or empty
-        });
-      } else {
-        // Empty placeholder row like in JULU BISHAL template
-        rows.push({
-          date: displayDate,
-          hours: '',
-          km: '',
-          parkingCharge: 0,
-          totalAmount: 0,
-        });
+          rows.push({
+            date: displayDate,
+            hours: hours > 0 ? hours : '',
+            km: km > 0 ? km : '',
+            nightCharge: night > 0 ? night : undefined,
+            parkingCharge: parking,
+            totalAmount: 0,
+            isOff: false,
+          });
+        }
       }
     }
 
@@ -122,13 +122,15 @@ export const InvoiceViewModal: React.FC = () => {
       const mainItem = invoice.items[0];
       sumKm = mainItem.totalRunKm || 0;
       sumHours = 0;
-      sumParking = (mainItem.parkingCharges || 0) + (mainItem.tollCharges || 0) + (mainItem.nightCharges || 0);
+      sumNight = mainItem.nightCharges || 0;
+      sumParking = (mainItem.parkingCharges || 0) + (mainItem.tollCharges || 0);
     }
 
     return {
       rows,
       totalHours: Math.round(sumHours),
       totalKm: sumKm,
+      totalNight: sumNight,
       totalParking: sumParking,
     };
   };
@@ -264,6 +266,7 @@ export const InvoiceViewModal: React.FC = () => {
               rows={bishalReportData.rows}
               totalHours={bishalReportData.totalHours}
               totalKm={bishalReportData.totalKm}
+              totalNight={bishalReportData.totalNight}
               totalParking={bishalReportData.totalParking}
               grandTotalAmount={invoice.netPayable || invoice.grandTotal}
               client={invoice.clientSnapshot}

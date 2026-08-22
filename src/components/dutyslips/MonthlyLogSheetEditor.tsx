@@ -821,16 +821,19 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                 date: formatDate(r.dateStr, 'dd-MM-yyyy'),
                 hours: r.totalHours > 0 ? r.totalHours : '',
                 km: r.totalKm > 0 ? r.totalKm : '',
-                parkingCharge: Number(r.parkingCharges) || 0,
                 nightCharge: Number(r.nightCharges) || 0,
+                parkingCharge: (Number(r.parkingCharges) || 0) + (Number(r.tollCharges) || 0),
                 totalAmount: 0,
+                isOff: r.isOffDay || r.totalKm === 0,
               }))}
               totalHours={Math.round(totalMonthHours)}
               totalKm={totalMonthKm}
-              totalParking={totalMonthParking + totalMonthNight + totalMonthToll}
+              totalNight={totalMonthNight}
+              totalParking={totalMonthParking + totalMonthToll}
               grandTotalAmount={0}
               client={selectedCli}
               elementId="bishal-sheet-direct-pdf-render"
+              hideOffDays={true}
             />
           )}
         </div>

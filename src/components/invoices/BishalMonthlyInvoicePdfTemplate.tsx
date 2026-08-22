@@ -3,11 +3,11 @@ import { CompanyProfile, Vehicle, Client, DutySlip, Invoice } from '../../types'
 import { formatDate } from '../../utils/formatters';
 
 export interface DailyReportRow {
-  date: string;       // "01-07-2026"
-  hours: number | string; // e.g. 10 or "10 HOURS"
-  km: number | string;    // e.g. 85 or "85 KM"
+  date: string;          // e.g. "01-07-2026"
+  hours: number | string;// e.g. 10 or "10 HOURS"
+  km: number | string;   // e.g. 85 or "85 KM"
   parkingCharge: number; // e.g. 100 or 0
-  nightCharge?: number;
+  nightCharge?: number;  // e.g. 350 or 0
   totalAmount: number;   // e.g. 1450
   notes?: string;
   isOff?: boolean;
@@ -16,15 +16,17 @@ export interface DailyReportRow {
 interface BishalMonthlyInvoicePdfTemplateProps {
   company: CompanyProfile;
   vehicle: Vehicle;
-  monthTitle: string; // e.g. "JULY 2026" or "AUGUST 2026"
-  invoiceDateStr: string; // e.g. "31-07-2026"
+  monthTitle: string;    // e.g. "JULY 2026" or "AUGUST 2026"
+  invoiceDateStr: string;// e.g. "31-07-2026"
   rows: DailyReportRow[];
   totalHours: number;
   totalKm: number;
+  totalNight?: number;
   totalParking: number;
   grandTotalAmount: number;
   client?: Client;
   elementId?: string;
+  hideOffDays?: boolean; // Default true: filters out Day Off / Garage Maintenance rows
 }
 
 export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTemplateProps> = ({
@@ -35,10 +37,25 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
   rows = [],
   totalHours = 0,
   totalKm = 0,
+  totalNight = 0,
   totalParking = 0,
   grandTotalAmount = 0,
   elementId = 'bishal-official-pdf-report',
+  hideOffDays = true,
 }) => {
+  // Filter out Day Off / Garage Maintenance rows so they do not show in the report
+  const visibleRows = hideOffDays
+    ? rows.filter(r => {
+        if (r.isOff) return false;
+        const hasKm = Number(r.km) > 0;
+        const hasHours = Number(r.hours) > 0;
+        const hasNight = Number(r.nightCharge) > 0;
+        const hasParking = Number(r.parkingCharge) > 0;
+        const hasAmt = Number(r.totalAmount) > 0;
+        return hasKm || hasHours || hasNight || hasParking || hasAmt;
+      })
+    : rows;
+
   return (
     <div
       id={elementId}
@@ -105,24 +122,25 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
           </div>
         </div>
 
-        {/* The 30/31 Day-Wise Table */}
+        {/* The Day-Wise Duty Table with NIGHT CHARGE & PARKING CHARGE Columns */}
         <div className="w-full overflow-hidden">
           <table className="w-full text-center border-collapse text-[11px]">
             <thead>
-              <tr className="border-b border-black font-bold uppercase text-[11px]">
+              <tr className="border-b border-black font-bold uppercase text-[10px] sm:text-[11px]">
                 <th className="py-2 px-2 border-r border-black w-24">DATE</th>
-                <th className="py-2 px-2 border-r border-black w-24">Hours</th>
-                <th className="py-2 px-2 border-r border-black w-24">K.M</th>
-                <th className="py-2 px-2 border-r border-black w-36">PARKING CHARGE</th>
-                <th className="py-2 px-2 w-32">TOTAL AMOUNT</th>
+                <th className="py-2 px-2 border-r border-black w-20">Hours</th>
+                <th className="py-2 px-2 border-r border-black w-20">K.M</th>
+                <th className="py-2 px-2 border-r border-black w-24">NIGHT CHARGE</th>
+                <th className="py-2 px-2 border-r border-black w-28">PARKING CHARGE</th>
+                <th className="py-2 px-2 w-28">TOTAL AMOUNT</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black font-medium">
-              {rows.map((row, index) => {
+              {visibleRows.map((row, index) => {
                 const hasHours = row.hours !== undefined && row.hours !== '' && Number(row.hours) > 0;
                 const hasKm = row.km !== undefined && row.km !== '' && Number(row.km) > 0;
-                const hasParking = Number(row.parkingCharge) > 0 || Number(row.nightCharge) > 0;
-                const totalSurcharge = (Number(row.parkingCharge) || 0) + (Number(row.nightCharge) || 0);
+                const nightAmt = Number(row.nightCharge) || 0;
+                const parkingAmt = Number(row.parkingCharge) || 0;
 
                 return (
                   <tr key={index} className="h-7 hover:bg-slate-50 transition-colors">
@@ -141,9 +159,14 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                       {hasKm ? `${row.km} KM` : ''}
                     </td>
 
+                    {/* Night Charge Column */}
+                    <td className="py-1 px-2 border-r border-black text-[11px]">
+                      {nightAmt > 0 ? `₹ ${nightAmt}` : ''}
+                    </td>
+
                     {/* Parking Charge Column */}
                     <td className="py-1 px-2 border-r border-black text-[11px]">
-                      {hasParking ? `₹ ${totalSurcharge}` : ''}
+                      {parkingAmt > 0 ? `₹ ${parkingAmt}` : ''}
                     </td>
 
                     {/* Total Amount Column */}
@@ -153,6 +176,14 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                   </tr>
                 );
               })}
+
+              {visibleRows.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-500 italic text-xs">
+                    No active vehicle runs recorded for this month yet.
+                  </td>
+                </tr>
+              )}
             </tbody>
             {/* Bottom Total Row matching JULU BISHAL.pdf */}
             <tfoot>
@@ -167,7 +198,10 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                   {totalKm} KM
                 </td>
                 <td className="py-2.5 px-2 border-r border-black font-bold">
-                  ₹ {totalParking}
+                  {totalNight > 0 ? `₹ ${totalNight}` : '₹ 0'}
+                </td>
+                <td className="py-2.5 px-2 border-r border-black font-bold">
+                  {totalParking > 0 ? `₹ ${totalParking}` : '₹ 0'}
                 </td>
                 <td className="py-2.5 px-2 font-bold text-xs">
                   {grandTotalAmount > 0 ? `₹ ${grandTotalAmount.toLocaleString('en-IN')}` : '₹ 0'}
