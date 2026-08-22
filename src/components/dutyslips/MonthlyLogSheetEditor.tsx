@@ -73,8 +73,9 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const [selectedClientId, setSelectedClientId] = useState<string>(clients[0]?.id || '');
   const [driverName, setDriverName] = useState<string>(vehicles[0]?.driverName || '');
   
-  // Pricing configuration for automatic total calculation
+  // Pricing & Standard Duty Time configuration
   const currentVeh = vehicles.find(v => v.id === selectedVehicleId) || vehicles[0];
+  const [defaultDutyHours, setDefaultDutyHours] = useState<number>(8); // Editable standard duty hours (e.g. 8h, 10h, 12h)
   const [ratePerKm, setRatePerKm] = useState<number>(currentVeh?.ratePerKm || 14);
   const [overtimeRatePerHour, setOvertimeRatePerHour] = useState<number>(currentVeh?.ratePerHour || 100);
 
@@ -97,20 +98,21 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     }
   }, [selectedVehicleId, vehicles]);
 
-  // Recalculate daily total amounts whenever ratePerKm or overtimeRatePerHour changes
+  // Compute row total amount (KM * Rate + Overtime automatically added + Surcharges)
   const computeRowTotal = (
     km: number, 
-    extraHrs: number, 
-    otCharges: number, 
+    totalHrs: number,
     night: number, 
     parking: number, 
     toll: number, 
     batta: number,
     kmRate: number,
-    otRate: number
+    otRate: number,
+    baseDutyHrs: number
   ) => {
     const kmCost = (km || 0) * kmRate;
-    const otCost = otCharges > 0 ? otCharges : (extraHrs || 0) * otRate;
+    const extraHrs = Math.max(0, (totalHrs || 0) - baseDutyHrs);
+    const otCost = extraHrs * otRate;
     return kmCost + otCost + (night || 0) + (parking || 0) + (toll || 0) + (batta || 0);
   };
 
@@ -138,17 +140,18 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
       if (existing) {
         const isOff = existing.totalKm === 0 && existing.route.toLowerCase().includes('off');
-        const otCost = (existing.extraHours || 0) * overtimeRatePerHour;
+        const extraHrs = Math.max(0, (existing.totalHours || 0) - defaultDutyHours);
+        const otCost = extraHrs * overtimeRatePerHour;
         const dayTotal = isOff ? 0 : computeRowTotal(
           existing.totalKm,
-          existing.extraHours,
-          otCost,
+          existing.totalHours,
           existing.nightCharges,
           existing.parkingCharges,
           existing.tollCharges,
           existing.driverBatta,
           ratePerKm,
-          overtimeRatePerHour
+          overtimeRatePerHour,
+          defaultDutyHours
         );
 
         generatedRows.push({
@@ -165,7 +168,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           startTime: existing.startTime || (isSunday ? '' : '08:30'),
           endTime: existing.endTime || (isSunday ? '' : '18:30'),
           totalHours: existing.totalHours || 0,
-          extraHours: existing.extraHours || 0,
+          extraHours: extraHrs,
           overtimeCharges: otCost,
           nightCharges: existing.nightCharges || 0,
           parkingCharges: existing.parkingCharges || 0,
@@ -187,20 +190,21 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           endKm: end,
           startTime: isOff ? '' : '08:30',
           endTime: isOff ? '' : '18:30',
-          baseDutyHours: 8
+          baseDutyHours: defaultDutyHours
         });
 
-        const otCost = isOff ? 0 : (metrics.extraHours || 0) * overtimeRatePerHour;
+        const extraHrs = Math.max(0, metrics.totalHours - defaultDutyHours);
+        const otCost = isOff ? 0 : extraHrs * overtimeRatePerHour;
         const dayTotal = isOff ? 0 : computeRowTotal(
           metrics.totalKm,
-          metrics.extraHours,
-          otCost,
+          metrics.totalHours,
           0,
           0,
           0,
           0,
           ratePerKm,
-          overtimeRatePerHour
+          overtimeRatePerHour,
+          defaultDutyHours
         );
 
         generatedRows.push({
@@ -217,7 +221,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           startTime: isOff ? '' : '08:30',
           endTime: isOff ? '' : '18:30',
           totalHours: isOff ? 0 : metrics.totalHours,
-          extraHours: isOff ? 0 : metrics.extraHours,
+          extraHours: isOff ? 0 : extraHrs,
           overtimeCharges: otCost,
           nightCharges: 0,
           parkingCharges: 0,
@@ -232,25 +236,31 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     setRows(generatedRows);
   }, [selectedYear, selectedMonth, selectedVehicleId]);
 
-  // Recalculate row totals if user changes ratePerKm or overtimeRatePerHour
+  // Recalculate row totals if user changes ratePerKm, overtimeRatePerHour, or defaultDutyHours
   useEffect(() => {
     setRows(prev => prev.map(row => {
       if (row.isOffDay) return row;
-      const ot = row.overtimeCharges > 0 ? row.overtimeCharges : (row.extraHours || 0) * overtimeRatePerHour;
+      const extraHrs = Math.max(0, (row.totalHours || 0) - defaultDutyHours);
+      const otCost = extraHrs * overtimeRatePerHour;
       const total = computeRowTotal(
         row.totalKm,
-        row.extraHours,
-        ot,
+        row.totalHours,
         row.nightCharges,
         row.parkingCharges,
         row.tollCharges,
         row.driverBatta,
         ratePerKm,
-        overtimeRatePerHour
+        overtimeRatePerHour,
+        defaultDutyHours
       );
-      return { ...row, overtimeCharges: ot, dayTotalAmount: total };
+      return { 
+        ...row, 
+        extraHours: extraHrs, 
+        overtimeCharges: otCost, 
+        dayTotalAmount: total 
+      };
     }));
-  }, [ratePerKm, overtimeRatePerHour]);
+  }, [ratePerKm, overtimeRatePerHour, defaultDutyHours]);
 
   // Handle single row cell update
   const handleRowChange = (index: number, field: keyof DailyRowData, val: any) => {
@@ -269,13 +279,13 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           endKm: end,
           startTime: sTime,
           endTime: eTime,
-          baseDutyHours: 8
+          baseDutyHours: defaultDutyHours
         });
 
         row.totalKm = metrics.totalKm;
         row.totalHours = metrics.totalHours;
-        row.extraHours = metrics.extraHours;
-        row.overtimeCharges = metrics.extraHours * overtimeRatePerHour;
+        row.extraHours = Math.max(0, metrics.totalHours - defaultDutyHours);
+        row.overtimeCharges = row.extraHours * overtimeRatePerHour;
       }
 
       if (field === 'totalKm') {
@@ -284,21 +294,17 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         row.endKm = (row.startKm || 0) + kmVal;
       }
 
-      if (field === 'overtimeCharges') {
-        row.overtimeCharges = Number(val) || 0;
-      }
-
-      // Re-calculate day total
+      // Re-calculate day total (Overtime automatically included!)
       row.dayTotalAmount = row.isOffDay ? 0 : computeRowTotal(
         row.totalKm,
-        row.extraHours,
-        row.overtimeCharges,
+        row.totalHours,
         Number(row.nightCharges) || 0,
         Number(row.parkingCharges) || 0,
         Number(row.tollCharges) || 0,
         Number(row.driverBatta) || 0,
         ratePerKm,
-        overtimeRatePerHour
+        overtimeRatePerHour,
+        defaultDutyHours
       );
 
       copy[index] = row;
@@ -328,17 +334,18 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         const km = end - start;
         currentKm = end;
         
-        const ot = row.overtimeCharges > 0 ? row.overtimeCharges : (row.extraHours || 0) * overtimeRatePerHour;
+        const extraHrs = Math.max(0, (row.totalHours || 0) - defaultDutyHours);
+        const otCost = extraHrs * overtimeRatePerHour;
         const total = computeRowTotal(
           km,
-          row.extraHours,
-          ot,
+          row.totalHours,
           row.nightCharges,
           row.parkingCharges,
           row.tollCharges,
           row.driverBatta,
           ratePerKm,
-          overtimeRatePerHour
+          overtimeRatePerHour,
+          defaultDutyHours
         );
 
         return {
@@ -346,7 +353,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           startKm: start,
           endKm: end,
           totalKm: km,
-          overtimeCharges: ot,
+          extraHours: extraHrs,
+          overtimeCharges: otCost,
           dayTotalAmount: total
         };
       });
@@ -369,20 +377,21 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           endKm: end,
           startTime: isOff ? '' : '08:30',
           endTime: isOff ? '' : '18:30',
-          baseDutyHours: 8
+          baseDutyHours: defaultDutyHours
         });
 
-        const ot = isOff ? 0 : metrics.extraHours * overtimeRatePerHour;
+        const extraHrs = isOff ? 0 : Math.max(0, metrics.totalHours - defaultDutyHours);
+        const otCost = extraHrs * overtimeRatePerHour;
         const total = isOff ? 0 : computeRowTotal(
           metrics.totalKm,
-          metrics.extraHours,
-          ot,
+          metrics.totalHours,
           0,
           0,
           0,
           0,
           ratePerKm,
-          overtimeRatePerHour
+          overtimeRatePerHour,
+          defaultDutyHours
         );
 
         return {
@@ -395,8 +404,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           startTime: isOff ? '' : '08:30',
           endTime: isOff ? '' : '18:30',
           totalHours: isOff ? 0 : metrics.totalHours,
-          extraHours: isOff ? 0 : metrics.extraHours,
-          overtimeCharges: ot,
+          extraHours: extraHrs,
+          overtimeCharges: otCost,
           dayTotalAmount: total
         };
       });
@@ -410,17 +419,19 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       const row = copy[index];
       const isOff = !row.isOffDay;
       const totalKm = isOff ? 0 : dailyAvgKm;
-      const ot = isOff ? 0 : 2 * overtimeRatePerHour;
+      const totalHrs = isOff ? 0 : 10;
+      const extraHrs = isOff ? 0 : Math.max(0, totalHrs - defaultDutyHours);
+      const otCost = extraHrs * overtimeRatePerHour;
       const total = isOff ? 0 : computeRowTotal(
         totalKm,
-        2,
-        ot,
+        totalHrs,
         0,
         0,
         0,
         0,
         ratePerKm,
-        overtimeRatePerHour
+        overtimeRatePerHour,
+        defaultDutyHours
       );
 
       copy[index] = {
@@ -432,9 +443,9 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         totalKm: totalKm,
         startTime: isOff ? '' : '08:30',
         endTime: isOff ? '' : '18:30',
-        totalHours: isOff ? 0 : 10,
-        extraHours: isOff ? 0 : 2,
-        overtimeCharges: ot,
+        totalHours: totalHrs,
+        extraHours: extraHrs,
+        overtimeCharges: otCost,
         nightCharges: 0,
         parkingCharges: 0,
         tollCharges: 0,
@@ -448,7 +459,6 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   // Calculate totals
   const totalMonthKm = rows.reduce((sum, r) => sum + (r.totalKm || 0), 0);
   const totalMonthHours = rows.reduce((sum, r) => sum + (r.totalHours || 0), 0);
-  const totalMonthOvertime = rows.reduce((sum, r) => sum + (Number(r.overtimeCharges) || 0), 0);
   const totalMonthNight = rows.reduce((sum, r) => sum + (Number(r.nightCharges) || 0), 0);
   const totalMonthParking = rows.reduce((sum, r) => sum + (Number(r.parkingCharges) || 0), 0);
   const totalMonthToll = rows.reduce((sum, r) => sum + (Number(r.tollCharges) || 0), 0);
@@ -528,7 +538,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               Daily Car Run & Surcharge Sheet (1st to 31st)
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              Set default Rate/KM and Overtime rate to auto-calculate daily & monthly total billing amounts.
+              Set standard duty hours (e.g. 8h/10h). Any hours beyond duty time automatically add overtime charges to the total amount.
             </p>
           </div>
 
@@ -553,20 +563,20 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         </div>
 
         {/* Selection & Rate Settings Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 pt-3 border-t border-slate-800 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 pt-3 border-t border-slate-800 text-xs">
           <div>
             <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
               Month & Year
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               <select
                 value={selectedMonth}
                 onChange={e => setSelectedMonth(Number(e.target.value))}
-                className="w-full px-2.5 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-bold"
+                className="w-full px-2 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-bold text-xs"
               >
                 {Array.from({ length: 12 }).map((_, i) => (
                   <option key={i} value={i}>
-                    {new Date(2026, i, 1).toLocaleString('en-US', { month: 'long' })}
+                    {new Date(2026, i, 1).toLocaleString('en-US', { month: 'short' })}
                   </option>
                 ))}
               </select>
@@ -574,7 +584,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               <select
                 value={selectedYear}
                 onChange={e => setSelectedYear(Number(e.target.value))}
-                className="px-2.5 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-mono font-bold"
+                className="px-2 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-mono font-bold text-xs"
               >
                 <option value={2025}>2025</option>
                 <option value={2026}>2026</option>
@@ -585,43 +595,56 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
           <div>
             <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
-              Select Car / Vehicle
+              Vehicle
             </label>
             <select
               value={selectedVehicleId}
               onChange={e => setSelectedVehicleId(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-mono font-bold"
+              className="w-full px-2 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-mono font-bold text-xs"
             >
               {vehicles.map(v => (
                 <option key={v.id} value={v.id}>
-                  {v.regNumber} ({v.model})
+                  {v.regNumber}
                 </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
-              Default Rate / KM (₹)
+            <label className="block text-[10px] uppercase font-bold text-amber-300 mb-1">
+              Standard Duty (Hrs)
             </label>
             <input
               type="number"
-              value={ratePerKm}
-              onChange={e => setRatePerKm(Number(e.target.value))}
+              value={defaultDutyHours}
+              onChange={e => setDefaultDutyHours(Number(e.target.value))}
               className="w-full px-2.5 py-1.5 bg-slate-800 text-amber-300 border border-slate-700 rounded-lg font-mono font-black text-sm"
-              placeholder="e.g. 14"
+              placeholder="e.g. 8"
             />
           </div>
 
           <div>
             <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
-              Overtime Rate / Hr (₹)
+              Rate / KM (₹)
+            </label>
+            <input
+              type="number"
+              value={ratePerKm}
+              onChange={e => setRatePerKm(Number(e.target.value))}
+              className="w-full px-2.5 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-mono font-bold text-sm"
+              placeholder="e.g. 14"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] uppercase font-bold text-emerald-300 mb-1">
+              OT Rate / Hr (₹)
             </label>
             <input
               type="number"
               value={overtimeRatePerHour}
               onChange={e => setOvertimeRatePerHour(Number(e.target.value))}
-              className="w-full px-2.5 py-1.5 bg-slate-800 text-emerald-300 border border-slate-700 rounded-lg font-mono font-black text-sm"
+              className="w-full px-2.5 py-1.5 bg-slate-800 text-emerald-300 border border-slate-700 rounded-lg font-mono font-bold text-sm"
               placeholder="e.g. 100"
             />
           </div>
@@ -634,7 +657,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               type="text"
               value={driverName}
               onChange={e => setDriverName(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-medium"
+              className="w-full px-2.5 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-medium text-xs"
               placeholder="Driver Name"
             />
           </div>
@@ -701,11 +724,11 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
         <div className="flex items-center gap-2 text-slate-500 text-[11px]">
           <Info className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Rates: ₹{ratePerKm}/KM + ₹{overtimeRatePerHour}/Hr Overtime</span>
+          <span>Standard: {defaultDutyHours}h duty. Beyond {defaultDutyHours}h auto-adds ₹{overtimeRatePerHour}/hr OT to Total.</span>
         </div>
       </div>
 
-      {/* Full Month Spreadsheet Table */}
+      {/* Clean Full Month Spreadsheet Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto max-h-[650px] overflow-y-auto">
           <table className="w-full text-left border-collapse text-xs">
@@ -716,16 +739,15 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                 <th className="py-2.5 px-2.5 border-r border-slate-700">Route & Duty Particulars</th>
                 <th className="py-2.5 px-1.5 w-20 text-center border-r border-slate-700">Start KM</th>
                 <th className="py-2.5 px-1.5 w-20 text-center border-r border-slate-700">End KM</th>
-                <th className="py-2.5 px-1.5 w-16 text-center border-r border-slate-700">Run (KM)</th>
+                <th className="py-2.5 px-1.5 w-18 text-center border-r border-slate-700">Run (KM)</th>
                 <th className="py-2.5 px-1.5 w-16 text-center border-r border-slate-700">Start Time</th>
                 <th className="py-2.5 px-1.5 w-16 text-center border-r border-slate-700">End Time</th>
                 <th className="py-2.5 px-1.5 w-14 text-center border-r border-slate-700">Hours</th>
-                <th className="py-2.5 px-1.5 w-20 text-right border-r border-slate-700">OT (₹)</th>
-                <th className="py-2.5 px-1.5 w-18 text-right border-r border-slate-700">Night (₹)</th>
-                <th className="py-2.5 px-1.5 w-18 text-right border-r border-slate-700">Park (₹)</th>
-                <th className="py-2.5 px-1.5 w-18 text-right border-r border-slate-700">Toll (₹)</th>
-                <th className="py-2.5 px-1.5 w-18 text-right border-r border-slate-700">Batta (₹)</th>
-                <th className="py-2.5 px-2 w-24 text-right border-r border-slate-700 bg-emerald-950 text-emerald-300">Total (₹)</th>
+                <th className="py-2.5 px-1.5 w-20 text-right border-r border-slate-700">Night (₹)</th>
+                <th className="py-2.5 px-1.5 w-20 text-right border-r border-slate-700">Park (₹)</th>
+                <th className="py-2.5 px-1.5 w-20 text-right border-r border-slate-700">Toll (₹)</th>
+                <th className="py-2.5 px-1.5 w-20 text-right border-r border-slate-700">Batta (₹)</th>
+                <th className="py-2.5 px-2.5 w-28 text-right border-r border-slate-700 bg-emerald-950 text-emerald-300">Total (₹)</th>
                 <th className="py-2.5 px-1.5 w-12 text-center">Status</th>
               </tr>
             </thead>
@@ -733,6 +755,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               {rows.map((row, idx) => {
                 const isSun = row.isSunday;
                 const isOff = row.isOffDay;
+                const hasOt = row.extraHours > 0;
 
                 return (
                   <tr 
@@ -848,21 +871,20 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       />
                     </td>
 
-                    {/* Total Hours */}
-                    <td className="py-1.5 px-1 text-center border-r border-slate-200 font-semibold text-slate-800 text-[11px]">
-                      {isOff ? '-' : `${row.totalHours}h`}
-                    </td>
-
-                    {/* Overtime Charges */}
-                    <td className="py-1.5 px-1 border-r border-slate-200">
-                      <input
-                        type="number"
-                        value={row.overtimeCharges || ''}
-                        onChange={e => handleRowChange(idx, 'overtimeCharges', e.target.value)}
-                        placeholder="₹"
-                        className="w-full px-1 py-1 text-xs font-mono text-right border border-slate-200 rounded bg-white text-emerald-800 font-bold"
-                        disabled={isOff}
-                      />
+                    {/* Total Hours with OT Badge if overtime */}
+                    <td className="py-1.5 px-1 text-center border-r border-slate-200 text-[11px]">
+                      {isOff ? (
+                        '-'
+                      ) : (
+                        <div>
+                          <span className="font-semibold text-slate-800">{row.totalHours}h</span>
+                          {hasOt && (
+                            <span className="block text-[9px] font-bold text-amber-600" title={`+${row.extraHours}h Overtime auto-added to Total`}>
+                              (+{row.extraHours}h OT)
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     {/* Night Charges */}
@@ -913,8 +935,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       />
                     </td>
 
-                    {/* Calculated Day Total Amount */}
-                    <td className="py-1.5 px-2 text-right border-r border-slate-200 font-mono font-black text-slate-900 bg-emerald-50/50 text-xs">
+                    {/* Calculated Day Total Amount (Includes KM + Overtime + Surcharges) */}
+                    <td className="py-1.5 px-2.5 text-right border-r border-slate-200 font-mono font-black text-slate-900 bg-emerald-50/70 text-xs">
                       {isOff ? '-' : `₹${row.dayTotalAmount.toLocaleString('en-IN')}`}
                     </td>
 
@@ -948,9 +970,6 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                 <td className="py-3 px-1 text-center font-mono font-bold text-slate-200 text-xs">
                   {totalMonthHours.toFixed(1)}h
                 </td>
-                <td className="py-3 px-1.5 text-right font-mono font-bold text-emerald-300 text-xs">
-                  {totalMonthOvertime > 0 ? `₹${totalMonthOvertime}` : '-'}
-                </td>
                 <td className="py-3 px-1.5 text-right font-mono font-bold text-amber-300 text-xs">
                   {totalMonthNight > 0 ? `₹${totalMonthNight}` : '-'}
                 </td>
@@ -963,7 +982,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                 <td className="py-3 px-1.5 text-right font-mono font-bold text-purple-300 text-xs">
                   {totalMonthBatta > 0 ? `₹${totalMonthBatta}` : '-'}
                 </td>
-                <td className="py-3 px-2 text-right font-mono font-black text-amber-400 text-sm bg-slate-950">
+                <td className="py-3 px-2.5 text-right font-mono font-black text-amber-400 text-sm bg-slate-950">
                   ₹{grandTotalAmount.toLocaleString('en-IN')}
                 </td>
                 <td></td>
@@ -984,7 +1003,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               Monthly Net Amount: <span className="text-emerald-700 font-extrabold text-base font-mono">₹{grandTotalAmount.toLocaleString('en-IN')}</span>
             </h4>
             <p className="text-xs text-slate-500">
-              Includes {totalMonthKm} KMs (@ ₹{ratePerKm}/KM) + ₹{totalMonthOvertime} Overtime + ₹{totalMonthNight} Night + ₹{totalMonthParking + totalMonthToll} Parking/Toll + ₹{totalMonthBatta} Batta.
+              Auto-calculated from {totalMonthKm} KMs (@ ₹{ratePerKm}/KM) + overtime beyond {defaultDutyHours}h (@ ₹{overtimeRatePerHour}/hr) + ₹{totalMonthNight} Night + ₹{totalMonthParking + totalMonthToll} Parking/Toll + ₹{totalMonthBatta} Batta.
             </p>
           </div>
         </div>
@@ -1024,7 +1043,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
         title={`Monthly Vehicle Bill Preview - ${selectedVeh?.regNumber} (${selectedMonthName})`}
-        subtitle="Exact 1:1 BISHAL TRAVELS layout matching your official format"
+        subtitle="Exact 1:1 BISHAL TRAVELS layout matching JULU BISHAL.pdf format"
         maxWidth="4xl"
       >
         <div className="space-y-4">
@@ -1032,7 +1051,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           <div className="flex items-center justify-between p-3 bg-slate-900 text-white rounded-xl no-print">
             <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4" />
-              <span>Official Format (Day Off Rows Hidden)</span>
+              <span>Official Format (Overtime Included in Total Amount)</span>
             </span>
 
             <div className="flex items-center gap-2">
@@ -1072,7 +1091,6 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                   date: formatDate(r.dateStr, 'dd-MM-yyyy'),
                   hours: r.totalHours > 0 ? r.totalHours : '',
                   km: r.totalKm > 0 ? r.totalKm : '',
-                  overtimeCharge: Number(r.overtimeCharges) || 0,
                   nightCharge: Number(r.nightCharges) || 0,
                   parkingCharge: (Number(r.parkingCharges) || 0) + (Number(r.tollCharges) || 0),
                   totalAmount: Number(r.dayTotalAmount) || 0,
@@ -1080,7 +1098,6 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                 }))}
                 totalHours={Math.round(totalMonthHours)}
                 totalKm={totalMonthKm}
-                totalOvertime={totalMonthOvertime}
                 totalNight={totalMonthNight}
                 totalParking={totalMonthParking + totalMonthToll}
                 grandTotalAmount={grandTotalAmount}

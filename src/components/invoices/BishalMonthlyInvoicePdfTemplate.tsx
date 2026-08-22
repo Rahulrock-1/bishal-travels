@@ -6,10 +6,9 @@ export interface DailyReportRow {
   date: string;          // e.g. "01-07-2026"
   hours: number | string;// e.g. 10 or "10 HOURS"
   km: number | string;   // e.g. 85 or "85 KM"
-  overtimeCharge?: number; // e.g. 240 or 0
   nightCharge?: number;  // e.g. 350 or 0
   parkingCharge: number; // e.g. 100 or 0
-  totalAmount: number;   // e.g. 1450 (KM * Rate + Overtime + Night + Parking)
+  totalAmount: number;   // e.g. 1450 (includes KM Rate + Overtime + Night + Parking + Toll)
   notes?: string;
   isOff?: boolean;
 }
@@ -22,7 +21,6 @@ interface BishalMonthlyInvoicePdfTemplateProps {
   rows: DailyReportRow[];
   totalHours: number;
   totalKm: number;
-  totalOvertime?: number;
   totalNight?: number;
   totalParking: number;
   grandTotalAmount: number;
@@ -39,7 +37,6 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
   rows = [],
   totalHours = 0,
   totalKm = 0,
-  totalOvertime = 0,
   totalNight = 0,
   totalParking = 0,
   grandTotalAmount = 0,
@@ -52,11 +49,10 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
         if (r.isOff) return false;
         const hasKm = Number(r.km) > 0;
         const hasHours = Number(r.hours) > 0;
-        const hasOt = Number(r.overtimeCharge) > 0;
         const hasNight = Number(r.nightCharge) > 0;
         const hasParking = Number(r.parkingCharge) > 0;
         const hasAmt = Number(r.totalAmount) > 0;
-        return hasKm || hasHours || hasOt || hasNight || hasParking || hasAmt;
+        return hasKm || hasHours || hasNight || hasParking || hasAmt;
       })
     : rows;
 
@@ -126,61 +122,54 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
           </div>
         </div>
 
-        {/* The Day-Wise Duty Table with OVERTIME, NIGHT CHARGE & PARKING CHARGE Columns */}
+        {/* The Clean Day-Wise Duty Table matching JULU BISHAL.pdf */}
         <div className="w-full overflow-hidden">
           <table className="w-full text-center border-collapse text-[11px]">
             <thead>
-              <tr className="border-b border-black font-bold uppercase text-[10px]">
-                <th className="py-2 px-1.5 border-r border-black w-20">DATE</th>
-                <th className="py-2 px-1 border-r border-black w-16">Hours</th>
-                <th className="py-2 px-1 border-r border-black w-16">K.M</th>
-                <th className="py-2 px-1.5 border-r border-black w-24">OVERTIME CHARGE</th>
-                <th className="py-2 px-1.5 border-r border-black w-20">NIGHT CHARGE</th>
-                <th className="py-2 px-1.5 border-r border-black w-24">PARKING CHARGE</th>
-                <th className="py-2 px-2 w-28">TOTAL AMOUNT</th>
+              <tr className="border-b border-black font-bold uppercase text-[11px]">
+                <th className="py-2 px-2 border-r border-black w-24">DATE</th>
+                <th className="py-2 px-2 border-r border-black w-24">Hours</th>
+                <th className="py-2 px-2 border-r border-black w-24">K.M</th>
+                <th className="py-2 px-2 border-r border-black w-28">NIGHT CHARGE</th>
+                <th className="py-2 px-2 border-r border-black w-32">PARKING CHARGE</th>
+                <th className="py-2 px-2 w-32">TOTAL AMOUNT</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black font-medium">
               {visibleRows.map((row, index) => {
                 const hasHours = row.hours !== undefined && row.hours !== '' && Number(row.hours) > 0;
                 const hasKm = row.km !== undefined && row.km !== '' && Number(row.km) > 0;
-                const otAmt = Number(row.overtimeCharge) || 0;
                 const nightAmt = Number(row.nightCharge) || 0;
                 const parkingAmt = Number(row.parkingCharge) || 0;
 
                 return (
                   <tr key={index} className="h-7 hover:bg-slate-50 transition-colors">
                     {/* Date Column */}
-                    <td className="py-1 px-1.5 border-r border-black font-medium text-[11px]">
+                    <td className="py-1 px-2 border-r border-black font-medium text-[11px]">
                       {row.date}
                     </td>
 
                     {/* Hours Column */}
-                    <td className="py-1 px-1 border-r border-black text-[11px]">
+                    <td className="py-1 px-2 border-r border-black text-[11px]">
                       {hasHours ? `${row.hours} HOURS` : ''}
                     </td>
 
                     {/* KM Column */}
-                    <td className="py-1 px-1 border-r border-black text-[11px]">
+                    <td className="py-1 px-2 border-r border-black text-[11px]">
                       {hasKm ? `${row.km} KM` : ''}
                     </td>
 
-                    {/* Overtime Charge Column */}
-                    <td className="py-1 px-1.5 border-r border-black text-[11px]">
-                      {otAmt > 0 ? `₹ ${otAmt}` : ''}
-                    </td>
-
                     {/* Night Charge Column */}
-                    <td className="py-1 px-1.5 border-r border-black text-[11px]">
+                    <td className="py-1 px-2 border-r border-black text-[11px]">
                       {nightAmt > 0 ? `₹ ${nightAmt}` : ''}
                     </td>
 
                     {/* Parking Charge Column */}
-                    <td className="py-1 px-1.5 border-r border-black text-[11px]">
+                    <td className="py-1 px-2 border-r border-black text-[11px]">
                       {parkingAmt > 0 ? `₹ ${parkingAmt}` : ''}
                     </td>
 
-                    {/* Total Amount Column */}
+                    {/* Total Amount Column (includes KM + Overtime + Surcharges) */}
                     <td className="py-1 px-2 text-[11px] font-semibold">
                       {row.totalAmount > 0 ? `₹ ${row.totalAmount.toLocaleString('en-IN')}` : ''}
                     </td>
@@ -190,7 +179,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
 
               {visibleRows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500 italic text-xs">
+                  <td colSpan={6} className="py-8 text-center text-slate-500 italic text-xs">
                     No active vehicle runs recorded for this month yet.
                   </td>
                 </tr>
@@ -199,22 +188,19 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
             {/* Bottom Total Row matching JULU BISHAL.pdf */}
             <tfoot>
               <tr className="border-t-2 border-black font-bold text-[11px] uppercase">
-                <td className="py-2.5 px-1.5 border-r border-black font-bold">
+                <td className="py-2.5 px-2 border-r border-black font-bold">
                   TOTAL
                 </td>
-                <td className="py-2.5 px-1 border-r border-black font-bold">
+                <td className="py-2.5 px-2 border-r border-black font-bold">
                   {totalHours} HOURS
                 </td>
-                <td className="py-2.5 px-1 border-r border-black font-bold">
+                <td className="py-2.5 px-2 border-r border-black font-bold">
                   {totalKm} KM
                 </td>
-                <td className="py-2.5 px-1.5 border-r border-black font-bold">
-                  {totalOvertime > 0 ? `₹ ${totalOvertime}` : '₹ 0'}
-                </td>
-                <td className="py-2.5 px-1.5 border-r border-black font-bold">
+                <td className="py-2.5 px-2 border-r border-black font-bold">
                   {totalNight > 0 ? `₹ ${totalNight}` : '₹ 0'}
                 </td>
-                <td className="py-2.5 px-1.5 border-r border-black font-bold">
+                <td className="py-2.5 px-2 border-r border-black font-bold">
                   {totalParking > 0 ? `₹ ${totalParking}` : '₹ 0'}
                 </td>
                 <td className="py-2.5 px-2 font-bold text-xs">

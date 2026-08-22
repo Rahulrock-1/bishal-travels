@@ -115,7 +115,6 @@ export const InvoiceViewModal: React.FC = () => {
             date: displayDate,
             hours: hours > 0 ? hours : '',
             km: km > 0 ? km : '',
-            overtimeCharge: ot > 0 ? ot : undefined,
             nightCharge: night > 0 ? night : undefined,
             parkingCharge: parking,
             totalAmount: dayTotal,
@@ -276,7 +275,6 @@ export const InvoiceViewModal: React.FC = () => {
               rows={bishalReportData.rows}
               totalHours={bishalReportData.totalHours}
               totalKm={bishalReportData.totalKm}
-              totalOvertime={bishalReportData.totalOvertime}
               totalNight={bishalReportData.totalNight}
               totalParking={bishalReportData.totalParking}
               grandTotalAmount={invoice.netPayable || invoice.grandTotal}
