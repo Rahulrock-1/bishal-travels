@@ -108,7 +108,10 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
           {/* Right Box: BANK DETAILS & DATE */}
           <div className="col-span-4 p-3 flex flex-col justify-center space-y-0.5 text-[10px] sm:text-[11px] font-bold leading-tight">
             <div>
-              {company.bankName || 'STATE BANK OF INDIA'} A/C NO - {company.accountNumber || '44982066411'}
+              {company.bankName || 'STATE BANK OF INDIA'}
+            </div>
+            <div>
+              A/C NO - {company.accountNumber || '44982066411'}
             </div>
             <div>
               IFSC CODE - {company.ifscCode || 'SBIN0002117'}
