@@ -100,6 +100,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
+  const [showStartEndKmInPdf, setShowStartEndKmInPdf] = useState<boolean>(false);
 
   const [rows, setRows] = useState<DailyRowData[]>([]);
 
@@ -1209,11 +1210,28 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       >
         <div className="space-y-4">
           {/* Top Actions Bar inside modal */}
-          <div className="flex items-center justify-between p-3 bg-slate-900 text-white rounded-xl no-print">
-            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4" />
-              <span>Official Format ({defaultBaseKm} KM & {defaultDutyHours}h Base Package + Highest Extra)</span>
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-900 text-white rounded-xl no-print">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4" />
+                <span>Official Format ({defaultBaseKm} KM & {defaultDutyHours}h Base Package + Highest Extra)</span>
+              </span>
+
+              {/* Toggle Start KM and End KM in PDF */}
+              <button
+                type="button"
+                onClick={() => setShowStartEndKmInPdf(!showStartEndKmInPdf)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                  showStartEndKmInPdf
+                    ? 'bg-emerald-700/80 border-emerald-500 text-white shadow-sm ring-1 ring-emerald-400/50'
+                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                }`}
+                title="Toggle Start KM and End KM columns visibility in the PDF report"
+              >
+                <span className={`w-2 h-2 rounded-full ${showStartEndKmInPdf ? 'bg-emerald-400 ring-2 ring-emerald-300/40' : 'bg-slate-500'}`} />
+                <span>Start & End KM: {showStartEndKmInPdf ? 'ON (Visible)' : 'OFF (Hidden)'}</span>
+              </button>
+            </div>
 
             <div className="flex items-center gap-2">
               <button
@@ -1252,6 +1270,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                   date: formatDate(r.dateStr, 'dd-MM-yyyy'),
                   hours: r.totalHours > 0 ? r.totalHours : '',
                   km: r.totalKm > 0 ? r.totalKm : '',
+                  startKm: r.startKm > 0 ? r.startKm : '',
+                  endKm: r.endKm > 0 ? r.endKm : '',
                   nightCharge: Number(r.nightCharges) || 0,
                   parkingCharge: (Number(r.parkingCharges) || 0) + (Number(r.tollCharges) || 0),
                   totalAmount: Number(r.dayTotalAmount) || 0,
@@ -1265,6 +1285,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                 client={selectedCli}
                 elementId="bishal-sheet-preview-render-modal"
                 hideOffDays={true}
+                showStartEndKm={showStartEndKmInPdf}
               />
             )}
           </div>

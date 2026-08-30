@@ -38,6 +38,8 @@ export const InvoiceViewModal: React.FC = () => {
   
   // Format Template Choice: 'bishal-official' (Exact match to JULU BISHAL.pdf) vs 'corporate-tax'
   const [templateFormat, setTemplateFormat] = useState<'bishal-official' | 'corporate-tax'>('bishal-official');
+  // Toggle Start KM & End KM visibility in the PDF
+  const [showStartEndKm, setShowStartEndKm] = useState(false);
 
   if (!selectedInvoiceForView) return null;
 
@@ -50,7 +52,9 @@ export const InvoiceViewModal: React.FC = () => {
 
   // Find attached duty slips or construct day-by-day rows for the month
   const attachedSlips = dutySlips.filter(ds => 
-    invoice.attachedDutySlipIds?.includes(ds.id) || ds.invoiceId === invoice.id
+    invoice.attachedDutySlipIds?.includes(ds.id) || 
+    ds.invoiceId === invoice.id ||
+    (primaryVehicle && ds.vehicleId === primaryVehicle.id)
   );
 
   // Generate 30/31 Day Rows matching the JULU BISHAL.pdf format
@@ -98,6 +102,8 @@ export const InvoiceViewModal: React.FC = () => {
       if (slip) {
         const hours = slip.totalHours || 0;
         const km = slip.totalKm || 0;
+        const startKm = slip.startKm || 0;
+        const endKm = slip.endKm || 0;
         const night = slip.nightCharges || 0;
         const parking = (slip.parkingCharges || 0) + (slip.tollCharges || 0);
         const baseKm = 100;
@@ -119,6 +125,8 @@ export const InvoiceViewModal: React.FC = () => {
             date: displayDate,
             hours: hours > 0 ? hours : '',
             km: km > 0 ? km : '',
+            startKm: startKm > 0 ? startKm : '',
+            endKm: endKm > 0 ? endKm : '',
             nightCharge: night > 0 ? night : undefined,
             parkingCharge: parking,
             totalAmount: dayTotal,
@@ -225,6 +233,23 @@ export const InvoiceViewModal: React.FC = () => {
               <FileText className="w-3.5 h-3.5 text-blue-300" />
               <span>Corporate Tax Bill</span>
             </button>
+
+            {/* Option to toggle Start KM and End KM visibility in Official PDF */}
+            {templateFormat === 'bishal-official' && (
+              <button
+                type="button"
+                onClick={() => setShowStartEndKm(!showStartEndKm)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                  showStartEndKm
+                    ? 'bg-emerald-700/80 border-emerald-500 text-white shadow-sm ring-1 ring-emerald-400/50'
+                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                }`}
+                title="Toggle Start KM and End KM columns visibility in the PDF report"
+              >
+                <span className={`w-2 h-2 rounded-full ${showStartEndKm ? 'bg-emerald-400 ring-2 ring-emerald-300/40' : 'bg-slate-500'}`} />
+                <span>Start & End KM: {showStartEndKm ? 'ON (Visible)' : 'OFF (Hidden)'}</span>
+              </button>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -284,6 +309,7 @@ export const InvoiceViewModal: React.FC = () => {
               grandTotalAmount={invoice.netPayable || invoice.grandTotal}
               client={invoice.clientSnapshot}
               elementId="bishal-official-pdf-report"
+              showStartEndKm={showStartEndKm}
             />
           )}
 

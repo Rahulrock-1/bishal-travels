@@ -6,6 +6,8 @@ export interface DailyReportRow {
   date: string;          // e.g. "01-07-2026"
   hours: number | string;// e.g. 10 or "10 HOURS"
   km: number | string;   // e.g. 85 or "85 KM"
+  startKm?: number | string; // Opening KM e.g. 10200
+  endKm?: number | string;   // Closing KM e.g. 10320
   nightCharge?: number;  // e.g. 350 or 0
   parkingCharge: number; // e.g. 100 or 0
   totalAmount: number;   // e.g. 1450 (includes KM Rate + Overtime + Night + Parking + Toll)
@@ -27,6 +29,7 @@ interface BishalMonthlyInvoicePdfTemplateProps {
   client?: Client;
   elementId?: string;
   hideOffDays?: boolean; // Default true: filters out Day Off / Garage Maintenance rows
+  showStartEndKm?: boolean; // When enabled, Start KM and End KM columns are rendered in PDF
 }
 
 export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTemplateProps> = ({
@@ -42,6 +45,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
   grandTotalAmount = 0,
   elementId = 'bishal-official-pdf-report',
   hideOffDays = true,
+  showStartEndKm = false,
 }) => {
   // Filter out Day Off / Garage Maintenance rows so they do not show in the report
   const visibleRows = hideOffDays
@@ -132,14 +136,27 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
         <div className="w-full overflow-hidden">
           <table className="w-full text-center border-collapse text-[11px]">
             <thead>
-              <tr className="border-b border-black font-bold uppercase text-[11px]">
-                <th className="py-2 px-2 border-r border-black w-24">DATE</th>
-                <th className="py-2 px-2 border-r border-black w-24">Hours</th>
-                <th className="py-2 px-2 border-r border-black w-24">K.M</th>
-                <th className="py-2 px-2 border-r border-black w-28">NIGHT CHARGE</th>
-                <th className="py-2 px-2 border-r border-black w-32">PARKING CHARGE</th>
-                <th className="py-2 px-2 w-32">TOTAL AMOUNT</th>
-              </tr>
+              {showStartEndKm ? (
+                <tr className="border-b border-black font-bold uppercase text-[10.5px]">
+                  <th className="py-2 px-1.5 border-r border-black w-24">DATE</th>
+                  <th className="py-2 px-1 border-r border-black w-16">Hours</th>
+                  <th className="py-2 px-1 border-r border-black w-20">Start KM</th>
+                  <th className="py-2 px-1 border-r border-black w-20">End KM</th>
+                  <th className="py-2 px-1 border-r border-black w-18">TOTAL KM</th>
+                  <th className="py-2 px-1 border-r border-black w-24">NIGHT CHARGE</th>
+                  <th className="py-2 px-1 border-r border-black w-28">PARKING CHARGE</th>
+                  <th className="py-2 px-1.5 w-28">TOTAL AMOUNT</th>
+                </tr>
+              ) : (
+                <tr className="border-b border-black font-bold uppercase text-[11px]">
+                  <th className="py-2 px-2 border-r border-black w-24">DATE</th>
+                  <th className="py-2 px-2 border-r border-black w-24">Hours</th>
+                  <th className="py-2 px-2 border-r border-black w-24">K.M</th>
+                  <th className="py-2 px-2 border-r border-black w-28">NIGHT CHARGE</th>
+                  <th className="py-2 px-2 border-r border-black w-32">PARKING CHARGE</th>
+                  <th className="py-2 px-2 w-32">TOTAL AMOUNT</th>
+                </tr>
+              )}
             </thead>
             <tbody className="divide-y divide-black font-medium">
               {visibleRows.map((row, index) => {
@@ -148,35 +165,54 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                 const nightAmt = Number(row.nightCharge) || 0;
                 const parkingAmt = Number(row.parkingCharge) || 0;
 
+                const startKmDisplay = row.startKm !== undefined && row.startKm !== '' && Number(row.startKm) > 0
+                  ? row.startKm
+                  : (row.startKm ? String(row.startKm) : '-');
+                const endKmDisplay = row.endKm !== undefined && row.endKm !== '' && Number(row.endKm) > 0
+                  ? row.endKm
+                  : (row.endKm ? String(row.endKm) : '-');
+
                 return (
                   <tr key={index} className="h-7 hover:bg-slate-50 transition-colors">
                     {/* Date Column */}
-                    <td className="py-1 px-2 border-r border-black font-medium text-[11px]">
+                    <td className="py-1 px-1.5 border-r border-black font-medium text-[11px]">
                       {row.date}
                     </td>
 
                     {/* Hours Column */}
-                    <td className="py-1 px-2 border-r border-black text-[11px]">
+                    <td className="py-1 px-1 border-r border-black text-[11px]">
                       {hasHours ? `${row.hours} HOURS` : ''}
                     </td>
 
+                    {/* Optional Start KM & End KM Columns */}
+                    {showStartEndKm && (
+                      <>
+                        <td className="py-1 px-1 border-r border-black font-mono text-[10.5px]">
+                          {startKmDisplay}
+                        </td>
+                        <td className="py-1 px-1 border-r border-black font-mono text-[10.5px]">
+                          {endKmDisplay}
+                        </td>
+                      </>
+                    )}
+
                     {/* KM Column */}
-                    <td className="py-1 px-2 border-r border-black text-[11px]">
+                    <td className="py-1 px-1.5 border-r border-black text-[11px]">
                       {hasKm ? `${row.km} KM` : ''}
                     </td>
 
                     {/* Night Charge Column */}
-                    <td className="py-1 px-2 border-r border-black text-[11px]">
+                    <td className="py-1 px-1.5 border-r border-black text-[11px]">
                       {nightAmt > 0 ? `₹ ${nightAmt}` : ''}
                     </td>
 
                     {/* Parking Charge Column */}
-                    <td className="py-1 px-2 border-r border-black text-[11px]">
+                    <td className="py-1 px-1.5 border-r border-black text-[11px]">
                       {parkingAmt > 0 ? `₹ ${parkingAmt}` : ''}
                     </td>
 
                     {/* Total Amount Column (includes KM + Overtime + Surcharges) */}
-                    <td className="py-1 px-2 text-[11px] font-semibold">
+                    <td className="py-1 px-1.5 text-[11px] font-semibold">
                       {row.totalAmount > 0 ? `₹ ${row.totalAmount.toLocaleString('en-IN')}` : ''}
                     </td>
                   </tr>
@@ -185,7 +221,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
 
               {visibleRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-500 italic text-xs">
+                  <td colSpan={showStartEndKm ? 8 : 6} className="py-8 text-center text-slate-500 italic text-xs">
                     No active vehicle runs recorded for this month yet.
                   </td>
                 </tr>
@@ -193,26 +229,55 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
             </tbody>
             {/* Bottom Total Row matching JULU BISHAL.pdf */}
             <tfoot>
-              <tr className="border-t-2 border-black font-bold text-[11px] uppercase">
-                <td className="py-2.5 px-2 border-r border-black font-bold">
-                  TOTAL
-                </td>
-                <td className="py-2.5 px-2 border-r border-black font-bold">
-                  {totalHours} HOURS
-                </td>
-                <td className="py-2.5 px-2 border-r border-black font-bold">
-                  {totalKm} KM
-                </td>
-                <td className="py-2.5 px-2 border-r border-black font-bold">
-                  {totalNight > 0 ? `₹ ${totalNight}` : '₹ 0'}
-                </td>
-                <td className="py-2.5 px-2 border-r border-black font-bold">
-                  {totalParking > 0 ? `₹ ${totalParking}` : '₹ 0'}
-                </td>
-                <td className="py-2.5 px-2 font-bold text-xs">
-                  {grandTotalAmount > 0 ? `₹ ${grandTotalAmount.toLocaleString('en-IN')}` : '₹ 0'}
-                </td>
-              </tr>
+              {showStartEndKm ? (
+                <tr className="border-t-2 border-black font-bold text-[11px] uppercase">
+                  <td className="py-2.5 px-1.5 border-r border-black font-bold">
+                    TOTAL
+                  </td>
+                  <td className="py-2.5 px-1 border-r border-black font-bold">
+                    {totalHours} HOURS
+                  </td>
+                  <td className="py-2.5 px-1 border-r border-black text-slate-400 font-normal">
+                    -
+                  </td>
+                  <td className="py-2.5 px-1 border-r border-black text-slate-400 font-normal">
+                    -
+                  </td>
+                  <td className="py-2.5 px-1 border-r border-black font-bold">
+                    {totalKm} KM
+                  </td>
+                  <td className="py-2.5 px-1 border-r border-black font-bold">
+                    {totalNight > 0 ? `₹ ${totalNight}` : '₹ 0'}
+                  </td>
+                  <td className="py-2.5 px-1 border-r border-black font-bold">
+                    {totalParking > 0 ? `₹ ${totalParking}` : '₹ 0'}
+                  </td>
+                  <td className="py-2.5 px-1.5 font-bold text-xs">
+                    {grandTotalAmount > 0 ? `₹ ${grandTotalAmount.toLocaleString('en-IN')}` : '₹ 0'}
+                  </td>
+                </tr>
+              ) : (
+                <tr className="border-t-2 border-black font-bold text-[11px] uppercase">
+                  <td className="py-2.5 px-2 border-r border-black font-bold">
+                    TOTAL
+                  </td>
+                  <td className="py-2.5 px-2 border-r border-black font-bold">
+                    {totalHours} HOURS
+                  </td>
+                  <td className="py-2.5 px-2 border-r border-black font-bold">
+                    {totalKm} KM
+                  </td>
+                  <td className="py-2.5 px-2 border-r border-black font-bold">
+                    {totalNight > 0 ? `₹ ${totalNight}` : '₹ 0'}
+                  </td>
+                  <td className="py-2.5 px-2 border-r border-black font-bold">
+                    {totalParking > 0 ? `₹ ${totalParking}` : '₹ 0'}
+                  </td>
+                  <td className="py-2.5 px-2 font-bold text-xs">
+                    {grandTotalAmount > 0 ? `₹ ${grandTotalAmount.toLocaleString('en-IN')}` : '₹ 0'}
+                  </td>
+                </tr>
+              )}
             </tfoot>
           </table>
         </div>
