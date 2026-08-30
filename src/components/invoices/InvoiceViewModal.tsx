@@ -40,6 +40,8 @@ export const InvoiceViewModal: React.FC = () => {
   const [templateFormat, setTemplateFormat] = useState<'bishal-official' | 'corporate-tax'>('bishal-official');
   // Toggle Start KM & End KM visibility in the PDF
   const [showStartEndKm, setShowStartEndKm] = useState(false);
+  // Toggle Start Time & End Time visibility in the PDF
+  const [showStartEndTime, setShowStartEndTime] = useState(false);
 
   if (!selectedInvoiceForView) return null;
 
@@ -104,6 +106,8 @@ export const InvoiceViewModal: React.FC = () => {
         const km = slip.totalKm || 0;
         const startKm = slip.startKm || 0;
         const endKm = slip.endKm || 0;
+        const startTime = slip.startTime || '';
+        const endTime = slip.endTime || '';
         const night = slip.nightCharges || 0;
         const parking = (slip.parkingCharges || 0) + (slip.tollCharges || 0);
         const baseKm = 100;
@@ -123,6 +127,8 @@ export const InvoiceViewModal: React.FC = () => {
 
           rows.push({
             date: displayDate,
+            startTime: startTime,
+            endTime: endTime,
             hours: hours > 0 ? hours : '',
             km: km > 0 ? km : '',
             startKm: startKm > 0 ? startKm : '',
@@ -236,19 +242,36 @@ export const InvoiceViewModal: React.FC = () => {
 
             {/* Option to toggle Start KM and End KM visibility in Official PDF */}
             {templateFormat === 'bishal-official' && (
-              <button
-                type="button"
-                onClick={() => setShowStartEndKm(!showStartEndKm)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
-                  showStartEndKm
-                    ? 'bg-emerald-700/80 border-emerald-500 text-white shadow-sm ring-1 ring-emerald-400/50'
-                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
-                }`}
-                title="Toggle Start KM and End KM columns visibility in the PDF report"
-              >
-                <span className={`w-2 h-2 rounded-full ${showStartEndKm ? 'bg-emerald-400 ring-2 ring-emerald-300/40' : 'bg-slate-500'}`} />
-                <span>Start & End KM: {showStartEndKm ? 'ON (Visible)' : 'OFF (Hidden)'}</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowStartEndKm(!showStartEndKm)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                    showStartEndKm
+                      ? 'bg-emerald-700/80 border-emerald-500 text-white shadow-sm ring-1 ring-emerald-400/50'
+                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                  }`}
+                  title="Toggle Start KM and End KM columns visibility in the PDF report"
+                >
+                  <span className={`w-2 h-2 rounded-full ${showStartEndKm ? 'bg-emerald-400 ring-2 ring-emerald-300/40' : 'bg-slate-500'}`} />
+                  <span>Start & End KM: {showStartEndKm ? 'ON' : 'OFF'}</span>
+                </button>
+
+                {/* Option to toggle Start Time and End Time visibility in Official PDF */}
+                <button
+                  type="button"
+                  onClick={() => setShowStartEndTime(!showStartEndTime)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                    showStartEndTime
+                      ? 'bg-emerald-700/80 border-emerald-500 text-white shadow-sm ring-1 ring-emerald-400/50'
+                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                  }`}
+                  title="Toggle Start Time and End Time columns visibility in the PDF report"
+                >
+                  <span className={`w-2 h-2 rounded-full ${showStartEndTime ? 'bg-emerald-400 ring-2 ring-emerald-300/40' : 'bg-slate-500'}`} />
+                  <span>Start & End Time: {showStartEndTime ? 'ON' : 'OFF'}</span>
+                </button>
+              </>
             )}
           </div>
 
@@ -310,6 +333,7 @@ export const InvoiceViewModal: React.FC = () => {
               client={invoice.clientSnapshot}
               elementId="bishal-official-pdf-report"
               showStartEndKm={showStartEndKm}
+              showStartEndTime={showStartEndTime}
             />
           )}
 
