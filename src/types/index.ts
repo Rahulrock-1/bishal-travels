@@ -46,6 +46,7 @@ export interface Vehicle {
   baseMonthlyRate: number;
   ratePerKm: number;
   ratePerHour: number;
+  garageRatePerKm?: number;
   nightChargeRate: number;
   status: 'Active' | 'Maintenance' | 'Inactive';
   notes?: string;
@@ -78,10 +79,15 @@ export interface DutySlip {
   startKm: number;
   endKm: number;
   totalKm: number;
+  garageOutKm?: number;
+  garageInKm?: number;
+  garageKm?: number;
   startTime: string; // HH:mm
   endTime: string;   // HH:mm
   totalHours: number;
   extraHours: number;
+  extraDuty?: string;
+  extraDutyCharges?: number;
   nightCharges: number;
   parkingCharges: number;
   tollCharges: number;

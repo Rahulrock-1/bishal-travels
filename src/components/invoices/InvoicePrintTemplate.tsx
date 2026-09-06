@@ -353,7 +353,7 @@ export const InvoicePrintTemplate: React.FC<InvoicePrintTemplateProps> = ({
           </span>
 
           <div className="mt-8 pt-1 border-t border-slate-400 w-48 text-center">
-            <div className="text-[11px] font-bold text-slate-900">{company.signatoryName || 'Authorized Signatory'}</div>
+            <div className="text-[11px] font-bold text-slate-900">{company.signatoryName && company.signatoryName !== 'Bishal' ? company.signatoryName : 'Biswajit Pramanik'}</div>
             <div className="text-[9px] text-slate-500 uppercase">{company.signatoryTitle || 'Proprietor / Signatory'}</div>
           </div>
         </div>

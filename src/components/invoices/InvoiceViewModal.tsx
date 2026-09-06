@@ -22,6 +22,7 @@ import { DutyAnnexurePrintTemplate } from './DutyAnnexurePrintTemplate';
 import { BishalMonthlyInvoicePdfTemplate, DailyReportRow } from './BishalMonthlyInvoicePdfTemplate';
 import { downloadInvoiceAsPdf, triggerPrint } from '../../utils/pdfGenerator';
 import { formatDate } from '../../utils/formatters';
+import { computeGarageKm } from '../../utils/calculations';
 
 export const InvoiceViewModal: React.FC = () => {
   const { 
@@ -36,12 +37,19 @@ export const InvoiceViewModal: React.FC = () => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [copiedNotification, setCopiedNotification] = useState(false);
   
-  // Format Template Choice: 'bishal-official' (Exact match to JULU BISHAL.pdf) vs 'corporate-tax'
-  const [templateFormat, setTemplateFormat] = useState<'bishal-official' | 'corporate-tax'>('bishal-official');
-  // Toggle Start KM & End KM visibility in the PDF
+  // Format Template Choice - Default to previous format 'bishal-official'
+  const [templateFormat, setTemplateFormat] = useState<
+    'dual-km-overtime' | 'bishal-official' | 'corporate-duty-annexure' | 'executive-summary' | 'corporate-tax'
+  >('bishal-official');
+  const [calcMode, setCalcMode] = useState<'both_km_and_overtime' | 'highest_extra'>('highest_extra');
+  // Column and visibility toggles
   const [showStartEndKm, setShowStartEndKm] = useState(false);
-  // Toggle Start Time & End Time visibility in the PDF
   const [showStartEndTime, setShowStartEndTime] = useState(false);
+  const [showGarageInOut, setShowGarageInOut] = useState(false);
+  const [defaultGarageKm, setDefaultGarageKm] = useState(20);
+  const [showOvertimeCol, setShowOvertimeCol] = useState(false);
+  const [showExtraDutyCol, setShowExtraDutyCol] = useState(false);
+  const [hideTotalPrice, setHideTotalPrice] = useState(false);
 
   if (!selectedInvoiceForView) return null;
 
@@ -64,9 +72,17 @@ export const InvoiceViewModal: React.FC = () => {
     rows: DailyReportRow[];
     totalHours: number;
     totalKm: number;
-    totalOvertime: number;
+    totalOvertimeHours: number;
+    totalGarageKm: number;
     totalNight: number;
     totalParking: number;
+    totalToll: number;
+    totalBatta: number;
+    totalExtraDutyCharges: number;
+    grandTotalAmount: number;
+    rateKm: number;
+    rateOt: number;
+    rateGarage: number;
   } => {
     // Parse billing month (e.g. "July 2026", "2026-07")
     let year = 2026;
@@ -89,13 +105,18 @@ export const InvoiceViewModal: React.FC = () => {
     let sumHours = 0;
     let sumKm = 0;
     let sumOt = 0;
+    let sumGarageKm = 0;
     let sumNight = 0;
     let sumParking = 0;
+    let sumToll = 0;
+    let sumBatta = 0;
+    let sumExtraDuty = 0;
+    let sumTotal = 0;
     const rateKm = primaryVehicle?.ratePerKm || 14;
     const rateOt = primaryVehicle?.ratePerHour || 100;
+    const rateGarage = primaryVehicle?.garageRatePerKm || rateKm;
 
     for (let day = 1; day <= daysInMonth; day++) {
-      const dateObj = new Date(year, monthIndex, day);
       const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const displayDate = `${String(day).padStart(2, '0')}-${String(monthIndex + 1).padStart(2, '0')}-${year}`;
       
@@ -103,38 +124,83 @@ export const InvoiceViewModal: React.FC = () => {
 
       if (slip) {
         const hours = slip.totalHours || 0;
+        const extraHours = slip.extraHours !== undefined ? slip.extraHours : Math.max(0, hours - 10);
         const km = slip.totalKm || 0;
         const startKm = slip.startKm || 0;
         const endKm = slip.endKm || 0;
         const startTime = slip.startTime || '';
         const endTime = slip.endTime || '';
+        let gOut = Number(slip.garageOutKm) || 0;
+        let gIn = Number(slip.garageInKm) || 0;
+        let garageKm = 0;
+
+        // ONLY calculate and apply garage run if showGarageInOut is TRUE!
+        if (showGarageInOut) {
+          const rawGarageKm = (Number(slip.garageKm) || 0) > 0 
+            ? Number(slip.garageKm) 
+            : computeGarageKm(gOut, gIn, startKm, endKm);
+          garageKm = rawGarageKm > 0 ? rawGarageKm : (km > 0 ? defaultGarageKm : 0);
+          if (garageKm > 0 && gOut === 0 && gIn === 0) {
+            gOut = Math.round((garageKm / 2) * 10) / 10;
+            gIn = Math.round((garageKm / 2) * 10) / 10;
+          }
+        }
+
+        const garageOutDisplay = showGarageInOut && gOut > 0 ? gOut : (showGarageInOut ? (slip.garageOutKm || '') : '');
+        const garageInDisplay = showGarageInOut && gIn > 0 ? gIn : (showGarageInOut ? (slip.garageInKm || '') : '');
         const night = slip.nightCharges || 0;
-        const parking = (slip.parkingCharges || 0) + (slip.tollCharges || 0);
+        const parking = slip.parkingCharges || 0;
+        const toll = slip.tollCharges || 0;
+        const batta = slip.driverBatta || 0;
+        const extraDutyCharges = Number(slip.extraDutyCharges) || 0;
         const baseKm = 100;
-        const baseHrs = 10;
-        const basePrice = (km > 0 || hours > 0) ? baseKm * rateKm : 0;
-        const extraKmCharge = Math.max(0, km - baseKm) * rateKm;
-        const extraHourCharge = Math.max(0, hours - baseHrs) * rateOt;
-        const highestExtra = Math.max(extraKmCharge, extraHourCharge);
-        const dayTotal = basePrice + highestExtra + night + parking;
+
+        let dayTotal = 0;
+        const effectiveGarageKm = showGarageInOut ? garageKm : 0;
+        if (calcMode === 'both_km_and_overtime') {
+          dayTotal = (km * rateKm) + (extraHours * rateOt) + (effectiveGarageKm * rateGarage) + night + parking + toll + batta + extraDutyCharges;
+        } else {
+          const basePrice = (km > 0 || hours > 0) ? baseKm * rateKm : 0;
+          const extraKmCharge = Math.max(0, km - baseKm) * rateKm;
+          const extraHourCharge = extraHours * rateOt;
+          const highestExtra = Math.max(extraKmCharge, extraHourCharge);
+          dayTotal = basePrice + highestExtra + (effectiveGarageKm * rateGarage) + night + parking + toll + batta + extraDutyCharges;
+        }
+
         const isOffDay = km === 0 && (slip.route?.toLowerCase().includes('off') || slip.route?.toLowerCase().includes('garage'));
 
-        if (!isOffDay && (km > 0 || hours > 0 || night > 0 || parking > 0)) {
+        if (!isOffDay && (km > 0 || hours > 0 || garageKm > 0 || night > 0 || parking > 0 || toll > 0 || extraDutyCharges > 0)) {
           sumHours += hours;
           sumKm += km;
+          sumOt += extraHours;
+          sumGarageKm += garageKm;
           sumNight += night;
           sumParking += parking;
+          sumToll += toll;
+          sumBatta += batta;
+          sumExtraDuty += extraDutyCharges;
+          sumTotal += dayTotal;
 
           rows.push({
             date: displayDate,
+            dutySlipNo: slip.dutySlipNo,
             startTime: startTime,
             endTime: endTime,
             hours: hours > 0 ? hours : '',
+            extraHours: extraHours > 0 ? extraHours : '',
+            extraDuty: slip.extraDuty || slip.route || '',
+            extraDutyCharges: extraDutyCharges,
             km: km > 0 ? km : '',
             startKm: startKm > 0 ? startKm : '',
             endKm: endKm > 0 ? endKm : '',
+            garageOutKm: garageOutDisplay,
+            garageInKm: garageInDisplay,
+            garageKm: garageKm,
+            overtimeCharges: extraHours * rateOt,
             nightCharge: night > 0 ? night : undefined,
             parkingCharge: parking,
+            tollCharge: toll,
+            driverBatta: batta,
             totalAmount: dayTotal,
             isOff: false,
           });
@@ -149,16 +215,26 @@ export const InvoiceViewModal: React.FC = () => {
       sumHours = 0;
       sumOt = mainItem.extraHourCharges || 0;
       sumNight = mainItem.nightCharges || 0;
-      sumParking = (mainItem.parkingCharges || 0) + (mainItem.tollCharges || 0);
+      sumParking = mainItem.parkingCharges || 0;
+      sumToll = mainItem.tollCharges || 0;
+      sumTotal = invoice.netPayable || invoice.grandTotal;
     }
 
     return {
       rows,
       totalHours: Math.round(sumHours),
       totalKm: sumKm,
-      totalOvertime: sumOt,
+      totalOvertimeHours: sumOt,
+      totalGarageKm: sumGarageKm,
       totalNight: sumNight,
       totalParking: sumParking,
+      totalToll: sumToll,
+      totalBatta: sumBatta,
+      totalExtraDutyCharges: sumExtraDuty,
+      grandTotalAmount: sumTotal || (invoice.netPayable || invoice.grandTotal),
+      rateKm,
+      rateOt,
+      rateGarage,
     };
   };
 
@@ -208,117 +284,218 @@ export const InvoiceViewModal: React.FC = () => {
     >
       <div className="space-y-4">
         {/* Top Format Selector & Action Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-900 text-white rounded-2xl shadow-sm no-print">
+        <div className="p-3.5 bg-slate-900 text-white rounded-2xl shadow-sm space-y-3 no-print">
           
-          {/* Format Switcher */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-bold uppercase mr-1">Format:</span>
-            
-            <button
-              type="button"
-              onClick={() => setTemplateFormat('bishal-official')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                templateFormat === 'bishal-official'
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'bg-slate-800 text-slate-300 hover:text-white'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
-              <span>Official Format (JULU BISHAL Style)</span>
-            </button>
+          {/* Format Selection Row */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-slate-400 font-bold uppercase mr-1">Format:</span>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setTemplateFormat('bishal-official');
+                  setShowOvertimeCol(false);
+                  setShowGarageInOut(false);
+                  setShowExtraDutyCol(false);
+                  setCalcMode('highest_extra');
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  templateFormat === 'bishal-official'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-slate-800 text-slate-300 hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Official JULU BISHAL (Previous Format)</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setTemplateFormat('corporate-tax')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                templateFormat === 'corporate-tax'
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'bg-slate-800 text-slate-300 hover:text-white'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5 text-blue-300" />
-              <span>Corporate Tax Bill</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTemplateFormat('dual-km-overtime');
+                  setShowOvertimeCol(true);
+                  setCalcMode('both_km_and_overtime');
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  templateFormat === 'dual-km-overtime'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-slate-800 text-slate-300 hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Dual KM & OT + Break-Up (New Structure)</span>
+              </button>
 
-            {/* Option to toggle Start KM and End KM visibility in Official PDF */}
-            {templateFormat === 'bishal-official' && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setShowStartEndKm(!showStartEndKm)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
-                    showStartEndKm
-                      ? 'bg-emerald-700/80 border-emerald-500 text-white shadow-sm ring-1 ring-emerald-400/50'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
-                  }`}
-                  title="Toggle Start KM and End KM columns visibility in the PDF report"
-                >
-                  <span className={`w-2 h-2 rounded-full ${showStartEndKm ? 'bg-emerald-400 ring-2 ring-emerald-300/40' : 'bg-slate-500'}`} />
-                  <span>Start & End KM: {showStartEndKm ? 'ON' : 'OFF'}</span>
-                </button>
+              <button
+                type="button"
+                onClick={() => setTemplateFormat('corporate-duty-annexure')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  templateFormat === 'corporate-duty-annexure'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-slate-800 text-slate-300 hover:text-white'
+                }`}
+              >
+                <span>Corporate Annexure</span>
+              </button>
 
-                {/* Option to toggle Start Time and End Time visibility in Official PDF */}
-                <button
-                  type="button"
-                  onClick={() => setShowStartEndTime(!showStartEndTime)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
-                    showStartEndTime
-                      ? 'bg-emerald-700/80 border-emerald-500 text-white shadow-sm ring-1 ring-emerald-400/50'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
-                  }`}
-                  title="Toggle Start Time and End Time columns visibility in the PDF report"
-                >
-                  <span className={`w-2 h-2 rounded-full ${showStartEndTime ? 'bg-emerald-400 ring-2 ring-emerald-300/40' : 'bg-slate-500'}`} />
-                  <span>Start & End Time: {showStartEndTime ? 'ON' : 'OFF'}</span>
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => setTemplateFormat('executive-summary')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  templateFormat === 'executive-summary'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-slate-800 text-slate-300 hover:text-white'
+                }`}
+              >
+                <span>Executive Summary</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTemplateFormat('corporate-tax')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  templateFormat === 'corporate-tax'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-slate-800 text-slate-300 hover:text-white'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5 text-blue-300" />
+                <span>Corporate Tax Bill</span>
+              </button>
+            </div>
+
+            {/* Calculation Mode Toggle */}
+            {templateFormat !== 'corporate-tax' && (
+              <button
+                type="button"
+                onClick={() => setCalcMode(calcMode === 'both_km_and_overtime' ? 'highest_extra' : 'both_km_and_overtime')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                  calcMode === 'both_km_and_overtime'
+                    ? 'bg-emerald-700/90 border-emerald-500 text-white shadow-sm'
+                    : 'bg-slate-800 border-slate-700 text-slate-300'
+                }`}
+                title="Toggle dual calculation mode (both KM & Overtime) vs highest extra"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Both KM & OT Calc: {calcMode === 'both_km_and_overtime' ? 'ON' : 'OFF'}</span>
+              </button>
             )}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            <select
-              value={invoice.status}
-              onChange={e => handleStatusChange(e.target.value as InvoiceStatus)}
-              className="px-2.5 py-1.5 text-xs font-bold bg-slate-800 text-white border border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="Draft">Draft</option>
-              <option value="Sent">Sent (Pending)</option>
-              <option value="Paid">Paid</option>
-              <option value="Partially Paid">Partially Paid</option>
-            </select>
+          {/* Column Toggles & Action Buttons Row */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {templateFormat !== 'corporate-tax' ? (
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400 mr-1">Columns:</span>
 
-            <button
-              onClick={handleCopyDetails}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors border border-slate-700"
-            >
-              <Share2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{copiedNotification ? 'Copied!' : 'Copy Summary'}</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => setShowStartEndKm(!showStartEndKm)}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                    showStartEndKm ? 'bg-emerald-800 border-emerald-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                >
+                  Start/End KM: {showStartEndKm ? 'ON' : 'OFF'}
+                </button>
 
-            <button
-              onClick={triggerPrint}
-              className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors border border-slate-700"
-            >
-              <Printer className="w-3.5 h-3.5 text-blue-400" />
-              <span>Print</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => setShowStartEndTime(!showStartEndTime)}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                    showStartEndTime ? 'bg-emerald-800 border-emerald-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                >
+                  Start/End Time: {showStartEndTime ? 'ON' : 'OFF'}
+                </button>
 
-            <button
-              onClick={handleDownloadPdf}
-              disabled={isGeneratingPdf}
-              className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
-            >
-              <Download className="w-4 h-4" />
-              <span>{isGeneratingPdf ? 'Generating PDF...' : 'Download PDF Report'}</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => setShowGarageInOut(!showGarageInOut)}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                    showGarageInOut ? 'bg-blue-800 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                >
+                  Garage In/Out: {showGarageInOut ? 'ON' : 'OFF'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowOvertimeCol(!showOvertimeCol)}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                    showOvertimeCol ? 'bg-amber-800 border-amber-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                >
+                  OT Col: {showOvertimeCol ? 'ON' : 'OFF'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowExtraDutyCol(!showExtraDutyCol)}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                    showExtraDutyCol ? 'bg-purple-800 border-purple-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                >
+                  Extra Duty (₹): {showExtraDutyCol ? 'ON' : 'OFF'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setHideTotalPrice(!hideTotalPrice)}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                    hideTotalPrice ? 'bg-rose-800 border-rose-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                >
+                  Daily Price: {hideTotalPrice ? 'HIDDEN' : 'VISIBLE'}
+                </button>
+              </div>
+            ) : <div />}
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2">
+              <select
+                value={invoice.status}
+                onChange={e => handleStatusChange(e.target.value as InvoiceStatus)}
+                className="px-2.5 py-1.5 text-xs font-bold bg-slate-800 text-white border border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="Draft">Draft</option>
+                <option value="Sent">Sent (Pending)</option>
+                <option value="Paid">Paid</option>
+                <option value="Partially Paid">Partially Paid</option>
+              </select>
+
+              <button
+                onClick={handleCopyDetails}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors border border-slate-700"
+              >
+                <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{copiedNotification ? 'Copied!' : 'Copy Summary'}</span>
+              </button>
+
+              <button
+                onClick={triggerPrint}
+                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors border border-slate-700"
+              >
+                <Printer className="w-3.5 h-3.5 text-blue-400" />
+                <span>Print</span>
+              </button>
+
+              <button
+                onClick={handleDownloadPdf}
+                disabled={isGeneratingPdf}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                <span>{isGeneratingPdf ? 'Generating PDF...' : 'Download PDF Report'}</span>
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Live Document Preview Container */}
         <div className="border border-slate-200 rounded-2xl overflow-x-auto bg-slate-100 p-2 sm:p-4 md:p-6 shadow-inner flex justify-start md:justify-center">
-          {/* FORMAT 1: EXACT MATCH TO JULU BISHAL.pdf */}
-          {templateFormat === 'bishal-official' && (
+          {/* FORMATS 1-4: BISHAL MULTI-FORMAT TEMPLATES */}
+          {templateFormat !== 'corporate-tax' && (
             <BishalMonthlyInvoicePdfTemplate
               company={company}
               vehicle={primaryVehicle}
@@ -327,17 +504,31 @@ export const InvoiceViewModal: React.FC = () => {
               rows={bishalReportData.rows}
               totalHours={bishalReportData.totalHours}
               totalKm={bishalReportData.totalKm}
+              totalOvertimeHours={bishalReportData.totalOvertimeHours}
+              totalGarageKm={bishalReportData.totalGarageKm}
               totalNight={bishalReportData.totalNight}
               totalParking={bishalReportData.totalParking}
-              grandTotalAmount={invoice.netPayable || invoice.grandTotal}
+              totalToll={bishalReportData.totalToll}
+              totalBatta={bishalReportData.totalBatta}
+              totalExtraDutyCharges={bishalReportData.totalExtraDutyCharges}
+              grandTotalAmount={bishalReportData.grandTotalAmount}
               client={invoice.clientSnapshot}
               elementId="bishal-official-pdf-report"
               showStartEndKm={showStartEndKm}
               showStartEndTime={showStartEndTime}
+              showGarageInOut={showGarageInOut}
+              showOvertimeCol={showOvertimeCol}
+              showExtraDutyCol={showExtraDutyCol}
+              hideTotalPrice={hideTotalPrice}
+              calcMode={calcMode}
+              pdfFormat={templateFormat as any}
+              ratePerKm={bishalReportData.rateKm}
+              overtimeRatePerHour={bishalReportData.rateOt}
+              garageRatePerKm={bishalReportData.rateGarage}
             />
           )}
 
-          {/* FORMAT 2: CORPORATE TAX INVOICE */}
+          {/* FORMAT 5: CORPORATE TAX INVOICE */}
           {templateFormat === 'corporate-tax' && (
             <div id="invoice-full-render-container" className="space-y-6 w-full max-w-[800px]">
               <InvoicePrintTemplate invoice={invoice} company={company} />

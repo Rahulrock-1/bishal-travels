@@ -28,8 +28,13 @@ export function loadInitialData(): AppStateData {
     const rawInvoices = localStorage.getItem(KEYS.INVOICES);
     const rawSetup = localStorage.getItem(KEYS.SETUP_COMPLETED);
 
+    const loadedCompany = rawCompany ? JSON.parse(rawCompany) : initialCompanyProfile;
+    if (loadedCompany && (loadedCompany.signatoryName === 'Bishal' || !loadedCompany.signatoryName)) {
+      loadedCompany.signatoryName = 'Biswajit Pramanik';
+    }
+
     return {
-      company: rawCompany ? JSON.parse(rawCompany) : initialCompanyProfile,
+      company: loadedCompany,
       vehicles: rawVehicles ? JSON.parse(rawVehicles) : sampleVehicles,
       clients: rawClients ? JSON.parse(rawClients) : sampleClients,
       dutySlips: rawDutySlips ? JSON.parse(rawDutySlips) : sampleDutySlips,

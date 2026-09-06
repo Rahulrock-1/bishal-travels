@@ -17,7 +17,7 @@ export const initialCompanyProfile: CompanyProfile = {
   ifscCode: 'SBIN0002117',
   branchName: 'Bishnupur Branch, South 24 Parganas',
   upiId: '9088933712@sbi',
-  signatoryName: 'Bishal',
+  signatoryName: 'Biswajit Pramanik',
   signatoryTitle: 'Proprietor / Authorized Signatory',
   defaultTerms: [
     'Payment must be cleared within 15 days from the date of invoice submission.',
