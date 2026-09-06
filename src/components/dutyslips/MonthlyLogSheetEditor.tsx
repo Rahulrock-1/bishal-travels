@@ -124,6 +124,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const [showStartEndKmInPdf, setShowStartEndKmInPdf] = useState<boolean>(false);
   const [showStartEndTimeInPdf, setShowStartEndTimeInPdf] = useState<boolean>(false);
+  const [showGarageColsInPdf, setShowGarageColsInPdf] = useState<boolean>(false);
 
   const [rows, setRows] = useState<DailyRowData[]>([]);
 
@@ -1275,7 +1276,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               title="Enable Garage Out KM and Garage In KM separated columns with auto-calculation"
             >
               <Car className="w-3.5 h-3.5" />
-              <span>Garage In/Out KM: {showGarageInOut ? 'ENABLED (2 Cols)' : 'OFF'}</span>
+              <span>Garage In/Out: {showGarageInOut ? 'ENABLED (Calc Below)' : 'OFF'}</span>
             </button>
 
             {/* Hide Total Price Calculate Button */}
@@ -2138,7 +2139,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       setPdfFormat(fmt.id as any);
                       if (fmt.id === 'bishal-official') {
                         setShowOvertimeCol(false);
-                        setShowGarageInOut(false);
+                        setShowGarageColsInPdf(false);
                         setShowExtraDutyCol(false);
                       } else if (fmt.id === 'dual-km-overtime') {
                         setShowOvertimeCol(true);
@@ -2187,7 +2188,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                   Start/End Time: {showStartEndTimeInPdf ? 'ON' : 'OFF'}
                 </button>
 
-                {/* Toggle Garage In/Out */}
+                {/* Toggle Garage In/Out Calculation */}
                 <button
                   type="button"
                   onClick={() => handleToggleGarageInOut()}
@@ -2196,8 +2197,23 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                       ? 'bg-blue-800/80 border-blue-500 text-white'
                       : 'bg-slate-800 border-slate-700 text-slate-400'
                   }`}
+                  title="Include Garage In/Out distance calculation below in PDF report"
                 >
-                  Garage In/Out: {showGarageInOut ? 'ON' : 'OFF'}
+                  Garage Calc: {showGarageInOut ? 'ON (Calc Below)' : 'OFF'}
+                </button>
+
+                {/* Toggle Garage Columns in PDF (Default: OFF - only columns are not shown in PDF) */}
+                <button
+                  type="button"
+                  onClick={() => setShowGarageColsInPdf(!showGarageColsInPdf)}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                    showGarageColsInPdf
+                      ? 'bg-blue-800/80 border-blue-500 text-white'
+                      : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                  title="Show or hide Garage Out / In table columns in the PDF report (Default: Hidden)"
+                >
+                  Garage Cols in PDF: {showGarageColsInPdf ? 'ON' : 'OFF'}
                 </button>
 
                 {/* Toggle Overtime Col */}
@@ -2313,6 +2329,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                 showStartEndKm={showStartEndKmInPdf}
                 showStartEndTime={showStartEndTimeInPdf}
                 showGarageInOut={showGarageInOut}
+                showGarageCols={showGarageColsInPdf}
                 showOvertimeCol={showOvertimeCol}
                 showExtraDutyCol={showExtraDutyCol}
                 hideTotalPrice={hideTotalPrice}

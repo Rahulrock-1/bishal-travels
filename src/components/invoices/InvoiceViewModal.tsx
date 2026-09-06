@@ -46,6 +46,7 @@ export const InvoiceViewModal: React.FC = () => {
   const [showStartEndKm, setShowStartEndKm] = useState(false);
   const [showStartEndTime, setShowStartEndTime] = useState(false);
   const [showGarageInOut, setShowGarageInOut] = useState(false);
+  const [showGarageColsInPdf, setShowGarageColsInPdf] = useState(false);
   const [defaultGarageKm, setDefaultGarageKm] = useState(20);
   const [showOvertimeCol, setShowOvertimeCol] = useState(false);
   const [showExtraDutyCol, setShowExtraDutyCol] = useState(false);
@@ -296,7 +297,7 @@ export const InvoiceViewModal: React.FC = () => {
                 onClick={() => {
                   setTemplateFormat('bishal-official');
                   setShowOvertimeCol(false);
-                  setShowGarageInOut(false);
+                  setShowGarageColsInPdf(false);
                   setShowExtraDutyCol(false);
                   setCalcMode('highest_extra');
                 }}
@@ -409,14 +410,28 @@ export const InvoiceViewModal: React.FC = () => {
                   Start/End Time: {showStartEndTime ? 'ON' : 'OFF'}
                 </button>
 
+                {/* Toggle Garage In/Out Calculation */}
                 <button
                   type="button"
                   onClick={() => setShowGarageInOut(!showGarageInOut)}
                   className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all border ${
                     showGarageInOut ? 'bg-blue-800 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'
                   }`}
+                  title="Include Garage In/Out run in calculation below"
                 >
-                  Garage In/Out: {showGarageInOut ? 'ON' : 'OFF'}
+                  Garage Calc: {showGarageInOut ? 'ON (Calc Below)' : 'OFF'}
+                </button>
+
+                {/* Toggle Garage Columns in PDF (Default: OFF - only columns are not shown in PDF) */}
+                <button
+                  type="button"
+                  onClick={() => setShowGarageColsInPdf(!showGarageColsInPdf)}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                    showGarageColsInPdf ? 'bg-blue-800 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                  title="Show or hide Garage Out / In table columns in PDF (Default: Hidden)"
+                >
+                  Garage Cols in PDF: {showGarageColsInPdf ? 'ON' : 'OFF'}
                 </button>
 
                 <button
@@ -517,6 +532,7 @@ export const InvoiceViewModal: React.FC = () => {
               showStartEndKm={showStartEndKm}
               showStartEndTime={showStartEndTime}
               showGarageInOut={showGarageInOut}
+              showGarageCols={showGarageColsInPdf}
               showOvertimeCol={showOvertimeCol}
               showExtraDutyCol={showExtraDutyCol}
               hideTotalPrice={hideTotalPrice}

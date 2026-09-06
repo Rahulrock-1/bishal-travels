@@ -48,7 +48,8 @@ export interface BishalMonthlyInvoicePdfTemplateProps {
   hideOffDays?: boolean; // Default true: filters out Day Off / Garage Maintenance rows
   showStartEndKm?: boolean; // When enabled, Start KM and End KM columns are rendered
   showStartEndTime?: boolean; // When enabled, Start Time and End Time columns are rendered
-  showGarageInOut?: boolean; // When enabled, Garage Out & Garage In KM columns are rendered
+  showGarageInOut?: boolean; // When enabled, Garage In/Out distance calculation is included
+  showGarageCols?: boolean; // When true, Garage Out & Garage In columns are rendered in the PDF table (Default false: columns hidden in PDF, calculation shown below)
   showOvertimeCol?: boolean; // When enabled, Overtime Hours column is rendered
   showExtraDutyCol?: boolean; // When enabled, Extra Duty Charges column is rendered
   hideTotalPrice?: boolean; // When enabled, hides daily Total Amount column (summary break-up remains at the end)
@@ -81,6 +82,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
   showStartEndKm = false,
   showStartEndTime = false,
   showGarageInOut = false,
+  showGarageCols = false,
   showOvertimeCol = true,
   showExtraDutyCol = false,
   hideTotalPrice = false,
@@ -109,7 +111,8 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
 
   const kmAmount = totalKm * ratePerKm;
   const overtimeAmount = totalOvertimeHours * overtimeRatePerHour;
-  const garageAmount = showGarageInOut ? (totalGarageKm * garageRatePerKm) : 0;
+  const isGarageActive = showGarageInOut || (totalGarageKm !== undefined && totalGarageKm > 0);
+  const garageAmount = isGarageActive ? (totalGarageKm * garageRatePerKm) : 0;
   const totalParkingAndToll = totalParking + totalToll;
   const computedGrandTotal = grandTotalAmount > 0 
     ? grandTotalAmount 
@@ -205,8 +208,8 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
               <span className="bg-white px-1.5 py-0.5 border border-slate-300 rounded font-bold">
                 OT: ₹{overtimeRatePerHour}/Hr
               </span>
-              {showGarageInOut && (
-                <span className="bg-white px-1.5 py-0.5 border border-slate-300 rounded font-bold">
+              {(isGarageActive && totalGarageKm > 0) && (
+                <span className="bg-white px-1.5 py-0.5 border border-slate-300 rounded font-bold text-blue-900">
                   Garage: ₹{garageRatePerKm}/KM
                 </span>
               )}
@@ -245,8 +248,8 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                   </th>
                 )}
 
-                {/* Separated Garage Out KM & Garage In KM Columns (when enabled) */}
-                {showGarageInOut && (
+                {/* Separated Garage Out KM & Garage In KM Columns (Hidden in PDF table by default, only rendered if showGarageCols is true) */}
+                {showGarageCols && (
                   <>
                     <th className="py-2 px-1 border-r border-black w-16 bg-blue-50/50 text-blue-950 font-bold">
                       Garage Out
@@ -266,7 +269,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                 )}
 
                 <th className="py-2 px-1 border-r border-black w-16">
-                  {(showStartEndKm || showStartEndTime || showGarageInOut) ? 'TOTAL KM' : 'K.M'}
+                  {(showStartEndKm || showStartEndTime || showGarageCols) ? 'TOTAL KM' : 'K.M'}
                 </th>
 
                 <th className="py-2 px-1 border-r border-black w-20">NIGHT CHARGE</th>
@@ -338,8 +341,8 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                       </td>
                     )}
 
-                    {/* Separated Garage Out & Garage In KM Columns */}
-                    {showGarageInOut && (
+                    {/* Separated Garage Out & Garage In KM Columns (Only when showGarageCols is true) */}
+                    {showGarageCols && (
                       <>
                         <td className="py-0.5 px-1 border-r border-black font-mono text-[10px]">
                           {garageOutDisplay}
@@ -394,7 +397,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                       5 + 
                       (showStartEndKm ? 2 : 0) + 
                       (showStartEndTime ? 2 : 0) + 
-                      (showGarageInOut ? 2 : 0) + 
+                      (showGarageCols ? 2 : 0) + 
                       (showOvertimeCol ? 1 : 0) + 
                       (showExtraDutyCol ? 1 : 0) + 
                       (!hideTotalPrice ? 1 : 0)
@@ -437,7 +440,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                   </td>
                 )}
 
-                {showGarageInOut && (
+                {showGarageCols && (
                   <>
                     <td className="py-2 px-1 border-r border-black font-mono text-[10px]">-</td>
                     <td className="py-2 px-1 border-r border-black font-mono text-[10px] font-bold">
@@ -475,8 +478,8 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
           </table>
         </div>
 
-        {/* AT THE END: CALCULATION BREAK-UP BOX (Only rendered in New Structure formats like dual-km-overtime, hidden in previous bishal-official format) */}
-        {pdfFormat !== 'bishal-official' && (
+        {/* AT THE END: CALCULATION BREAK-UP BOX (Rendered in New Structure formats OR whenever Garage calculation is active) */}
+        {(pdfFormat !== 'bishal-official' || (isGarageActive && totalGarageKm > 0)) && (
           <div className="border-t-2 border-black p-3 bg-slate-50/90">
             <div className="text-[11px] font-bold uppercase tracking-wider text-black border-b border-black pb-1 mb-2 flex items-center justify-between">
               <span>BILLING CALCULATION BREAK-UP & FINAL SUMMARY</span>
@@ -498,9 +501,10 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                   <strong className="font-mono text-amber-900">₹ {overtimeAmount.toLocaleString('en-IN')}</strong>
                 </div>
 
-                {showGarageInOut && totalGarageKm > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span>Garage In/Out Run ({totalGarageKm} KM × ₹{garageRatePerKm}/KM):</span>
+                {/* Garage In/Out Run Calculation - Always displayed here when garage run is active, even though columns are hidden in PDF table */}
+                {isGarageActive && totalGarageKm > 0 && (
+                  <div className="flex justify-between items-center bg-blue-50/60 px-1.5 py-0.5 rounded border border-blue-200">
+                    <span className="font-semibold text-blue-950">Garage In/Out Run ({totalGarageKm} KM × ₹{garageRatePerKm}/KM):</span>
                     <strong className="font-mono text-blue-900">₹ {garageAmount.toLocaleString('en-IN')}</strong>
                   </div>
                 )}
