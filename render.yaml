@@ -13,3 +13,7 @@ services:
         sync: false
         # Paste your Supabase PostgreSQL connection string in the Render Dashboard:
         # Host=db.xxx.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=YOUR_PASSWORD;SSL Mode=Require;Trust Server Certificate=true;
+      - key: RABBITMQ_ADMIN_USER
+        value: Rahul
+      - key: RABBITMQ_ADMIN_PASS
+        value: Rahul@1998
