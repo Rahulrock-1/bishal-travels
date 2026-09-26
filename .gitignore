@@ -44,3 +44,8 @@ Thumbs.db
 
 # TypeScript Cache
 *.tsbuildinfo
+
+# .NET Build Output
+**/bin/
+**/obj/
+*.user
