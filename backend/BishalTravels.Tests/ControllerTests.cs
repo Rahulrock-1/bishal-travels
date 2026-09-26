@@ -1,33 +1,65 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using BishalTravels.Api.Common;
 using BishalTravels.Api.Controllers;
 using BishalTravels.Api.Data;
 using BishalTravels.Api.DTOs;
 using BishalTravels.Api.Models;
+using BishalTravels.Api.Repositories;
 using BishalTravels.Api.Services;
+using BishalTravels.Api.Services.Implementations;
+using BishalTravels.Api.Services.Interfaces;
 
 namespace BishalTravels.Tests;
 
 public class ControllerTests
 {
-    private BishalTravelsDbContext CreateInMemoryDbContext(string dbName)
+    private (BishalTravelsDbContext context, IMediator mediator) CreateTestDependencies(string dbName)
     {
-        var options = new DbContextOptionsBuilder<BishalTravelsDbContext>()
-            .UseInMemoryDatabase(databaseName: dbName)
-            .Options;
+        var services = new ServiceCollection();
+        services.AddDbContext<BishalTravelsDbContext>(options =>
+            options.UseInMemoryDatabase(databaseName: dbName));
 
-        var context = new BishalTravelsDbContext(options);
-        return context;
+        // Repositories & Unit of Work
+        services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IVehicleRepository, VehicleRepository>();
+        services.AddScoped<IClientRepository, ClientRepository>();
+        services.AddScoped<IDutySlipRepository, DutySlipRepository>();
+        services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+        services.AddScoped<ICompanyProfileRepository, CompanyProfileRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
+
+        // Domain & Application Services
+        services.AddScoped<ICalculationService, CalculationService>();
+        services.AddScoped<ICompanyService, CompanyService>();
+        services.AddScoped<IVehicleService, VehicleService>();
+        services.AddScoped<IClientService, ClientService>();
+        services.AddScoped<IDutySlipService, DutySlipService>();
+        services.AddScoped<IInvoiceService, InvoiceService>();
+        services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<IBackupService, BackupService>();
+        services.AddScoped<IAuthService, AuthService>();
+
+        // CQRS Mediator & Request Handlers
+        services.AddCqrs(typeof(BishalTravelsDbContext).Assembly);
+
+        var provider = services.BuildServiceProvider();
+        var context = provider.GetRequiredService<BishalTravelsDbContext>();
+        var mediator = provider.GetRequiredService<IMediator>();
+
+        return (context, mediator);
     }
 
     [Fact]
     public async Task CompanyController_ReturnsAndUpdatesCompanyProfile()
     {
-        using var context = CreateInMemoryDbContext(nameof(CompanyController_ReturnsAndUpdatesCompanyProfile));
+        var (context, mediator) = CreateTestDependencies(nameof(CompanyController_ReturnsAndUpdatesCompanyProfile));
         await DbInitializer.InitializeAsync(context);
 
-        var controller = new CompanyController(context);
+        var controller = new CompanyController(mediator);
 
         // 1. Get profile
         var getResult = await controller.GetCompanyProfile();
@@ -50,8 +82,8 @@ public class ControllerTests
     [Fact]
     public async Task VehiclesController_PerformsFullCrudOperations()
     {
-        using var context = CreateInMemoryDbContext(nameof(VehiclesController_PerformsFullCrudOperations));
-        var controller = new VehiclesController(context);
+        var (context, mediator) = CreateTestDependencies(nameof(VehiclesController_PerformsFullCrudOperations));
+        var controller = new VehiclesController(mediator);
 
         // 1. Create Vehicle
         var createDto = new CreateVehicleDto(
@@ -122,10 +154,9 @@ public class ControllerTests
     [Fact]
     public async Task InvoicesController_CreatesInvoiceAndMarksDutySlipsBilled()
     {
-        using var context = CreateInMemoryDbContext(nameof(InvoicesController_CreatesInvoiceAndMarksDutySlipsBilled));
-        var calcService = new CalculationService();
-        var slipsController = new DutySlipsController(context, calcService);
-        var invoicesController = new InvoicesController(context);
+        var (context, mediator) = CreateTestDependencies(nameof(InvoicesController_CreatesInvoiceAndMarksDutySlipsBilled));
+        var slipsController = new DutySlipsController(mediator);
+        var invoicesController = new InvoicesController(mediator);
 
         // Seed client and vehicle
         var client = new Client
@@ -189,13 +220,12 @@ public class ControllerTests
         Assert.Equal(200m, createdSlip.TotalKm);
 
         // Create Invoice attaching the duty slip
-        var invDto = new CreateInvoiceDto(
+        var invDto = new CreateInvoiceRequestDto(
             InvoiceNumber: "BT/26-27/009",
             InvoiceDate: "2026-08-31",
             DueDate: "2026-09-15",
             BillingMonth: "August 2026",
             ClientId: client.Id,
-            ClientSnapshot: client,
             ContractRefNo: "CNT-2026-001",
             Items: new List<InvoiceItemDto>
             {
@@ -227,25 +257,11 @@ public class ControllerTests
             Subtotal: 4150,
             TaxType: "GST_5",
             TaxRate: 5,
-            Cgst: 103.75m,
-            Sgst: 103.75m,
-            Igst: 0,
             IsInterstate: false,
             Discount: 0,
             AdvanceReceived: 0,
             TdsRate: 0,
             TdsAmount: 0,
-            GrandTotal: 4357.50m,
-            NetPayable: 4357.50m,
-            AmountInWords: "Rupees Four Thousand Three Hundred Fifty-Seven and Fifty Paise Only",
-            BankDetails: new BankDetailsDto("SBI", "Bishal Travels", "44982066411", "SBIN0002117", "Bishnupur", "9088933712@sbi"),
-            TradeLicenseNo: "1711",
-            CompanyGstin: "",
-            CompanyPan: "BQNPP4333F",
-            CompanyPhone: "9088933712",
-            CompanyEmail: "bishaltravels.kolkata@gmail.com",
-            CompanyAddress: "Hooghly, West Bengal",
-            Status: "Draft",
             Notes: "Monthly invoice",
             Terms: new List<string> { "Payment within 15 days" }
         );

@@ -1,8 +1,13 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using BishalTravels.Api.Common;
 using BishalTravels.Api.Data;
+using BishalTravels.Api.Middleware;
+using BishalTravels.Api.Repositories;
 using BishalTravels.Api.Services;
+using BishalTravels.Api.Services.Implementations;
+using BishalTravels.Api.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,7 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
-// 2. Add Services
+// 2. Add MVC Controllers & JSON Formatting
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -21,14 +26,14 @@ builder.Services.AddControllers()
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new()
     {
-        Title = "Bishal Travels Fleet & Invoice API",
-        Version = "v1",
-        Description = "ASP.NET Core 8 Web API for Bishal Travels Fleet Management, Duty Slips, and Corporate GST Invoicing with Supabase PostgreSQL & Render Deployment."
+        c.SwaggerDoc("v1", new()
+        {
+            Title = "Bishal Travels Fleet & Invoice API (Clean Architecture & CQRS)",
+            Version = "v1",
+            Description = "Decoupled Clean Architecture with CQRS, Unit of Work, Repository Layer, and Custom Middlewares for Bishal Travels Fleet & Corporate Invoicing."
+        });
     });
-});
 
 // 3. Configure Database Connection (Supabase PostgreSQL / InMemory Fallback)
 var defaultConn = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -55,9 +60,31 @@ else
         options.UseInMemoryDatabase("BishalTravelsDevDb"));
 }
 
-// 4. Domain Services & CORS
-builder.Services.AddScoped<ICalculationService, CalculationService>();
+// 4. Data Access Layer (Repositories & Unit of Work)
+builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
+builder.Services.AddScoped<IClientRepository, ClientRepository>();
+builder.Services.AddScoped<IDutySlipRepository, DutySlipRepository>();
+builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+builder.Services.AddScoped<ICompanyProfileRepository, CompanyProfileRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
+// 5. Domain & Application Services
+builder.Services.AddScoped<ICalculationService, CalculationService>();
+builder.Services.AddScoped<ICompanyService, CompanyService>();
+builder.Services.AddScoped<IVehicleService, VehicleService>();
+builder.Services.AddScoped<IClientService, ClientService>();
+builder.Services.AddScoped<IDutySlipService, DutySlipService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IBackupService, BackupService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+// 6. CQRS Mediator & Request Handlers Registration
+builder.Services.AddCqrs(typeof(Program).Assembly);
+
+// 7. CORS Policy
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAllOrigins", policy =>
@@ -71,7 +98,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// 5. Database Auto-Migration & Seed on Startup
+// 8. Database Auto-Migration & Seed on Startup
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -87,7 +114,8 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// 6. HTTP Pipeline
+// 9. HTTP Pipeline Middlewares
+app.UseCustomMiddlewares(); // Global Exception Handling + Request Logging & Timing Header
 app.UseCors("AllowAllOrigins");
 
 // Enable Swagger in all environments for API testing

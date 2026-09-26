@@ -223,6 +223,43 @@ public record BankDetailsDto(
 
 public record UpdateInvoiceStatusDto(string Status);
 
+public record CreateInvoiceRequestDto(
+    string? InvoiceNumber,
+    string InvoiceDate,
+    string DueDate,
+    string BillingMonth,
+    string ClientId,
+    string? ContractRefNo,
+    List<InvoiceItemDto>? Items,
+    List<string>? AttachedDutySlipIds,
+    decimal Subtotal,
+    string TaxType,
+    decimal TaxRate,
+    bool IsInterstate,
+    decimal Discount,
+    decimal AdvanceReceived,
+    decimal TdsRate,
+    decimal TdsAmount,
+    string? Notes,
+    List<string>? Terms
+);
+
+public record UpdateInvoiceRequestDto(
+    string? InvoiceDate,
+    string? DueDate,
+    string? BillingMonth,
+    string? ContractRefNo,
+    decimal? Subtotal,
+    string? TaxType,
+    decimal? TaxRate,
+    bool? IsInterstate,
+    decimal? Discount,
+    decimal? AdvanceReceived,
+    decimal? TdsRate,
+    string? Notes,
+    string? Status
+);
+
 // --- Full App State / Backup DTO ---
 public record AppStateDataDto(
     CompanyProfileDto Company,
