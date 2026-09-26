@@ -213,6 +213,55 @@ app.UseSwaggerUI(c =>
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// 14. Health Check Endpoint for Database & Cloud connectivity probe
+app.MapGet("/health", async (BishalTravelsDbContext dbContext) =>
+{
+    try
+    {
+        var canConnect = await dbContext.Database.CanConnectAsync();
+        return Results.Ok(new
+        {
+            status = "Healthy",
+            database = canConnect ? "Connected" : "Disconnected",
+            service = "Bishal Travels Fleet & Invoicing API",
+            timestamp = DateTime.UtcNow
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new
+        {
+            status = "Degraded",
+            database = "Unreachable",
+            error = ex.Message
+        }, statusCode: 503);
+    }
+}).AllowAnonymous();
+
+app.MapGet("/api/health", async (BishalTravelsDbContext dbContext) =>
+{
+    try
+    {
+        var canConnect = await dbContext.Database.CanConnectAsync();
+        return Results.Ok(new
+        {
+            status = "Healthy",
+            database = canConnect ? "Connected" : "Disconnected",
+            timestamp = DateTime.UtcNow
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new
+        {
+            status = "Degraded",
+            database = "Unreachable",
+            error = ex.Message
+        }, statusCode: 503);
+    }
+}).AllowAnonymous();
+
 app.MapControllers();
 
 app.Run();

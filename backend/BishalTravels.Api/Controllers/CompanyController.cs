@@ -8,7 +8,6 @@ namespace BishalTravels.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
 public class CompanyController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -19,6 +18,7 @@ public class CompanyController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<CompanyProfileDto>> GetCompanyProfile()
     {
         var profile = await _mediator.Send(new GetCompanyProfileQuery());
@@ -26,6 +26,7 @@ public class CompanyController : ControllerBase
     }
 
     [HttpPut]
+    [Authorize]
     public async Task<ActionResult<CompanyProfileDto>> UpdateCompanyProfile([FromBody] CompanyProfileDto dto)
     {
         var updated = await _mediator.Send(new UpdateCompanyProfileCommand(dto));

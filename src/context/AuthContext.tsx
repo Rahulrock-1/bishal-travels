@@ -50,6 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (response.token) {
           localStorage.setItem(AUTH_TOKEN_KEY, response.token);
         }
+        window.dispatchEvent(new CustomEvent('auth:login', { detail: response.token }));
         return { success: true };
       }
     } catch (err) {
@@ -65,6 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       setUser(authUser);
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+      window.dispatchEvent(new CustomEvent('auth:login'));
       return { success: true };
     }
 
@@ -78,6 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
     localStorage.removeItem(AUTH_TOKEN_KEY);
+    window.dispatchEvent(new CustomEvent('auth:logout'));
   };
 
   return (

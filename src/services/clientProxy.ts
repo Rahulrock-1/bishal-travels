@@ -53,14 +53,16 @@ class ClientSideApiProxy {
   }
 
   private handleUnauthorized() {
-    console.warn('[Client-Side Proxy]: Received 401 Unauthorized from API. Purging stored credentials.');
-    try {
-      localStorage.removeItem('bishal_travels_token');
-      localStorage.removeItem('bishal_travels_auth_user');
-      // Dispatch event so React components can reactively update
-      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
-    } catch {
-      // ignore
+    const existingToken = this.getAuthToken();
+    if (existingToken) {
+      console.warn('[Client-Side Proxy]: Received 401 Unauthorized from API. Purging expired credentials.');
+      try {
+        localStorage.removeItem('bishal_travels_token');
+        localStorage.removeItem('bishal_travels_auth_user');
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      } catch {
+        // ignore
+      }
     }
   }
 

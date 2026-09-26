@@ -71,7 +71,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     saveDataToStorage(data);
   }, [data]);
 
-  // Initial cloud fetch on mount
+  // Cloud fetch on mount and on auth change
   const refreshFromCloud = useCallback(async () => {
     setIsLoadingFromCloud(true);
     try {
@@ -84,15 +84,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         api.invoices.getAll().catch(() => null)
       ]);
 
-      if (cloudCompany && cloudVehicles && cloudClients && cloudDutySlips && cloudInvoices) {
-        setData({
+      if (cloudCompany) {
+        setData(prev => ({
+          ...prev,
           company: cloudCompany,
-          vehicles: cloudVehicles,
-          clients: cloudClients,
-          dutySlips: cloudDutySlips,
-          invoices: cloudInvoices,
+          vehicles: cloudVehicles ?? prev.vehicles,
+          clients: cloudClients ?? prev.clients,
+          dutySlips: cloudDutySlips ?? prev.dutySlips,
+          invoices: cloudInvoices ?? prev.invoices,
           setupCompleted: true
-        });
+        }));
         setIsCloudConnected(true);
       } else {
         setIsCloudConnected(false);
@@ -107,6 +108,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     refreshFromCloud();
+
+    const onAuthLogin = () => {
+      refreshFromCloud();
+    };
+
+    window.addEventListener('auth:login', onAuthLogin);
+    return () => window.removeEventListener('auth:login', onAuthLogin);
   }, [refreshFromCloud]);
 
   const updateCompany = (profile: Partial<CompanyProfile>) => {
