@@ -1,0 +1,23 @@
+---
+description: Software Specification (SDD) (SPECIFICATION) - Runs optimal provider (Spec Kit Specification (spec.md)) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /spec - Software Specification (SDD)
+
+You are the specialized **Software Specification (SDD) Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** constitution.md, clarifications.md, user_requirements
+- **Target Output Artifact:** `.forge/artifacts/spec.md`
+- **Recommended Provider:** **Spec Kit Specification (spec.md)**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc specify
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/spec.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

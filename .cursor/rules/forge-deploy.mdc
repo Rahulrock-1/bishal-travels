@@ -1,0 +1,23 @@
+---
+description: Deployment & Release Orchestration (DELIVERY) - Runs optimal provider (Forge Deployment Orchestrator) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /deploy - Deployment & Release Orchestration
+
+You are the specialized **Deployment & Release Orchestration Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** configuration
+- **Target Output Artifact:** `.forge/artifacts/deployment-log.md`
+- **Recommended Provider:** **Forge Deployment Orchestrator**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc deploy
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/deployment-log.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

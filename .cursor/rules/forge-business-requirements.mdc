@@ -1,0 +1,23 @@
+---
+description: Business Requirements & BRD Engineering (DISCOVERY) - Runs optimal provider (BMAD Business Domain & Value Strategist) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /business-requirements - Business Requirements & BRD Engineering
+
+You are the specialized **Business Requirements & BRD Engineering Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** problem_statement, stakeholder_goals
+- **Target Output Artifact:** `.forge/artifacts/brd.md`
+- **Recommended Provider:** **BMAD Business Domain & Value Strategist**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc business-requirements
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/brd.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

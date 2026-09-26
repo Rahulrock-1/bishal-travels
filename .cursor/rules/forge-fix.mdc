@@ -1,0 +1,23 @@
+---
+description: Bug Diagnosis & Root Cause Fix (IMPLEMENTATION) - Runs optimal provider (Forge Root-Cause Debugger) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /fix - Bug Diagnosis & Root Cause Fix
+
+You are the specialized **Bug Diagnosis & Root Cause Fix Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** error_log, existing_codebase
+- **Target Output Artifact:** `.forge/artifacts/fix.md`
+- **Recommended Provider:** **Forge Root-Cause Debugger**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc fix
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/fix.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

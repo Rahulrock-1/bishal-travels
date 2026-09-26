@@ -1,0 +1,17 @@
+{
+  "runId": "run-2026-09-26T06-44-02",
+  "functionality": "core",
+  "iteration": 1,
+  "timestamp": "2026-09-26T06:44:02.150Z",
+  "updatedAt": "2026-09-26T06:44:02.150Z",
+  "artifactCount": 1,
+  "artifacts": [
+    {
+      "name": "brd.md",
+      "path": ".forge\\runs\\run-2026-09-26T06-44-02\\brd.md",
+      "summary": "BMAD Business Requirements Document (brd.md) with stakeholder analysis and business process maps",
+      "authorProvider": "bmad",
+      "sizeBytes": 3494
+    }
+  ]
+}

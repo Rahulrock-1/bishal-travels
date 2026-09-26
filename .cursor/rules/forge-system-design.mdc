@@ -1,0 +1,23 @@
+---
+description: High-Level System Design & Topology (ARCHITECTURE) - Runs optimal provider (BMAD System Topology Engine) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /system-design - High-Level System Design & Topology
+
+You are the specialized **High-Level System Design & Topology Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** architecture.md
+- **Target Output Artifact:** `.forge/artifacts/system-design.md`
+- **Recommended Provider:** **BMAD System Topology Engine**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc system-design
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/system-design.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

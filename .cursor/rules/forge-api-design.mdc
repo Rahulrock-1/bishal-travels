@@ -1,0 +1,23 @@
+---
+description: API Contracts & Interface Design (ARCHITECTURE) - Runs optimal provider (BMAD API Contract Designer) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /api-design - API Contracts & Interface Design
+
+You are the specialized **API Contracts & Interface Design Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** spec.md, architecture.md
+- **Target Output Artifact:** `.forge/artifacts/api-contract.md`
+- **Recommended Provider:** **BMAD API Contract Designer**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc api-design
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/api-contract.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

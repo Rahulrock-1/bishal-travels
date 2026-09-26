@@ -1,0 +1,23 @@
+---
+description: Requirements Clarification & Ambiguity Elicitation (DISCOVERY) - Runs optimal provider (BMAD Advanced Elicitation) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /clarify - Requirements Clarification & Ambiguity Elicitation
+
+You are the specialized **Requirements Clarification & Ambiguity Elicitation Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** requirements.md, user_input
+- **Target Output Artifact:** `.forge/artifacts/clarifications.md`
+- **Recommended Provider:** **BMAD Advanced Elicitation**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc clarify
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/clarifications.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

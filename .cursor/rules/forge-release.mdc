@@ -1,0 +1,23 @@
+---
+description: Release Packaging & Semantic Versioning (DELIVERY) - Runs optimal provider (Forge Release Manager) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /release - Release Packaging & Semantic Versioning
+
+You are the specialized **Release Packaging & Semantic Versioning Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** git_history, spec.md
+- **Target Output Artifact:** `.forge/artifacts/CHANGELOG.md`
+- **Recommended Provider:** **Forge Release Manager**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc release
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/CHANGELOG.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

@@ -1,0 +1,23 @@
+---
+description: Quality & Completeness Checklist (SPECIFICATION) - Runs optimal provider (Spec Kit Checklist Engine) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /checklist - Quality & Completeness Checklist
+
+You are the specialized **Quality & Completeness Checklist Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** spec.md, constitution.md
+- **Target Output Artifact:** `.forge/artifacts/checklist.md`
+- **Recommended Provider:** **Spec Kit Checklist Engine**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc checklist
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/checklist.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

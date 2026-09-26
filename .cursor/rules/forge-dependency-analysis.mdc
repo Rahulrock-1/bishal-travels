@@ -1,0 +1,23 @@
+---
+description: Dependency & Critical Path Analysis (PLANNING) - Runs optimal provider (Spec Kit Dependency Analyzer) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /dependency-analysis - Dependency & Critical Path Analysis
+
+You are the specialized **Dependency & Critical Path Analysis Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** tasks.md
+- **Target Output Artifact:** `.forge/artifacts/dependency-graph.md`
+- **Recommended Provider:** **Spec Kit Dependency Analyzer**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc dependency-analysis
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/dependency-graph.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

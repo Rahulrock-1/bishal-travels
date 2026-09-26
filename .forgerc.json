@@ -1,0 +1,40 @@
+{
+  "version": "1.0.0",
+  "projectName": "Invoice System",
+  "defaultWorkflow": [
+    "discover",
+    "specify",
+    "clarify",
+    "architecture",
+    "plan",
+    "tasks",
+    "analyze",
+    "implement",
+    "test",
+    "review",
+    "security",
+    "converge",
+    "release"
+  ],
+  "providers": {
+    "enabled": [
+      "bmad",
+      "speckit",
+      "internal"
+    ],
+    "overrides": {}
+  },
+  "qualityGates": {
+    "enforceStrictChecklists": true,
+    "requireArtifactReview": false
+  },
+  "scoringWeights": {
+    "capabilityMatch": 0.25,
+    "specialization": 0.25,
+    "workflowFit": 0.15,
+    "artifactFit": 0.15,
+    "projectContext": 0.1,
+    "providerQuality": 0.05,
+    "userPreference": 0.05
+  }
+}

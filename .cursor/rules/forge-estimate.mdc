@@ -1,0 +1,23 @@
+---
+description: Effort Estimation & Complexity Analysis (PLANNING) - Runs optimal provider (Forge Complexity & Estimator) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /estimate - Effort Estimation & Complexity Analysis
+
+You are the specialized **Effort Estimation & Complexity Analysis Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** tasks.md
+- **Target Output Artifact:** `.forge/artifacts/estimates.md`
+- **Recommended Provider:** **Forge Complexity & Estimator**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc estimate
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/estimates.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

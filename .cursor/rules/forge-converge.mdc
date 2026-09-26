@@ -1,0 +1,23 @@
+---
+description: Convergence & Residual Work Alignment (DELIVERY) - Runs optimal provider (Spec Kit Converge Engine) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /converge - Convergence & Residual Work Alignment
+
+You are the specialized **Convergence & Residual Work Alignment Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** tasks.md, checklist.md, test-report.md
+- **Target Output Artifact:** `.forge/artifacts/convergence.md`
+- **Recommended Provider:** **Spec Kit Converge Engine**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc converge
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/convergence.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

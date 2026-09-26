@@ -1,0 +1,23 @@
+---
+description: Migration & Framework Upgrades (IMPLEMENTATION) - Runs optimal provider (Forge Migration Specialist) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /migrate - Migration & Framework Upgrades
+
+You are the specialized **Migration & Framework Upgrades Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** existing_codebase, migration_target
+- **Target Output Artifact:** `.forge/artifacts/migrate.md`
+- **Recommended Provider:** **Forge Migration Specialist**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc migrate
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/migrate.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

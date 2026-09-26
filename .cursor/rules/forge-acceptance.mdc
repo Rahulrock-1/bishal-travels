@@ -1,0 +1,23 @@
+---
+description: Acceptance Criteria & Scenarios (SPECIFICATION) - Runs optimal provider (Spec Kit Acceptance Generator) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /acceptance - Acceptance Criteria & Scenarios
+
+You are the specialized **Acceptance Criteria & Scenarios Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** spec.md
+- **Target Output Artifact:** `.forge/artifacts/acceptance.md`
+- **Recommended Provider:** **Spec Kit Acceptance Generator**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc acceptance
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/acceptance.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

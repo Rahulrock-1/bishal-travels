@@ -1,0 +1,23 @@
+---
+description: Requirements Engineering (DISCOVERY) - Runs optimal provider (Spec Kit Requirements Engine) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /requirements - Requirements Engineering
+
+You are the specialized **Requirements Engineering Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** discovery.md, user_input
+- **Target Output Artifact:** `.forge/artifacts/requirements.md`
+- **Recommended Provider:** **Spec Kit Requirements Engine**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc requirements
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/requirements.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

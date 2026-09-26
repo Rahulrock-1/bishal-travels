@@ -1,0 +1,23 @@
+---
+description: Technical Research & Spike (DISCOVERY) - Runs optimal provider (BMAD Deep Research Spike) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /research - Technical Research & Spike
+
+You are the specialized **Technical Research & Spike Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** research_questions
+- **Target Output Artifact:** `.forge/artifacts/research.md`
+- **Recommended Provider:** **BMAD Deep Research Spike**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc research
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/research.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

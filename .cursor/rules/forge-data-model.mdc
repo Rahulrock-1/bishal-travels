@@ -1,0 +1,23 @@
+---
+description: Data Modeling & Schema Design (ARCHITECTURE) - Runs optimal provider (BMAD Data & Entity Modeler) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /data-model - Data Modeling & Schema Design
+
+You are the specialized **Data Modeling & Schema Design Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** spec.md, architecture.md
+- **Target Output Artifact:** `.forge/artifacts/data-model.md`
+- **Recommended Provider:** **BMAD Data & Entity Modeler**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc data-model
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/data-model.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

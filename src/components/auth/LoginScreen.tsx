@@ -23,18 +23,21 @@ export const LoginScreen: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setIsLoading(true);
 
-    setTimeout(() => {
-      const res = login(email, password);
+    try {
+      const res = await login(email, password);
       if (!res.success) {
         setErrorMsg(res.error || 'Authentication failed.');
         setIsLoading(false);
       }
-    }, 400);
+    } catch {
+      setErrorMsg('An unexpected error occurred during login.');
+      setIsLoading(false);
+    }
   };
 
   const handleQuickFill = () => {

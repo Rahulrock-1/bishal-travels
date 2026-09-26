@@ -22,7 +22,15 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ mobileMenuOpen, setMobileMenuOpen }) => {
-  const { company, activeTab, setActiveTab, setIsSettingsModalOpen } = useApp();
+  const { 
+    company, 
+    activeTab, 
+    setActiveTab, 
+    setIsSettingsModalOpen,
+    isCloudConnected,
+    isLoadingFromCloud,
+    refreshFromCloud
+  } = useApp();
   const { user, logout } = useAuth();
 
   const navItems: { id: ActiveTab; label: string; icon: React.ElementType }[] = [
@@ -83,6 +91,32 @@ export const Navbar: React.FC<NavbarProps> = ({ mobileMenuOpen, setMobileMenuOpe
 
           {/* Settings & Profile Trigger */}
           <div className="hidden sm:flex items-center gap-3">
+            {/* Cloud API & Database Status Pill */}
+            <button
+              onClick={() => refreshFromCloud()}
+              disabled={isLoadingFromCloud}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                isCloudConnected 
+                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50 hover:bg-emerald-900/60' 
+                  : 'bg-amber-950/60 text-amber-300 border-amber-700/50 hover:bg-amber-900/60'
+              }`}
+              title={isCloudConnected ? "Connected to .NET Web API & Supabase PostgreSQL (Click to sync)" : "Running in Offline / LocalStorage Mode (Click to retry cloud connection)"}
+            >
+              {isLoadingFromCloud ? (
+                <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : isCloudConnected ? (
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              ) : (
+                <span className="h-2 w-2 rounded-full bg-amber-400"></span>
+              )}
+              <span className="hidden xl:inline text-[11px] font-semibold">
+                {isLoadingFromCloud ? 'Syncing...' : isCloudConnected ? 'Cloud (.NET / Supabase)' : 'Offline (Local)'}
+              </span>
+            </button>
+
             <button
               onClick={() => setIsSettingsModalOpen(true)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-800 hover:text-white border border-slate-700 transition-colors"

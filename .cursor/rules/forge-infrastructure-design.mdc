@@ -1,0 +1,23 @@
+---
+description: Infrastructure & Cloud Architecture (ARCHITECTURE) - Runs optimal provider (Forge DevOps & Cloud Engine) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /infrastructure-design - Infrastructure & Cloud Architecture
+
+You are the specialized **Infrastructure & Cloud Architecture Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** architecture.md
+- **Target Output Artifact:** `.forge/artifacts/infrastructure.md`
+- **Recommended Provider:** **Forge DevOps & Cloud Engine**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc infrastructure-design
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/infrastructure.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

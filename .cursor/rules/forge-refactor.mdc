@@ -1,0 +1,23 @@
+---
+description: Code Refactoring & Technical Debt Cleanup (IMPLEMENTATION) - Runs optimal provider (BMAD Deep Refactoring Engine) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /refactor - Code Refactoring & Technical Debt Cleanup
+
+You are the specialized **Code Refactoring & Technical Debt Cleanup Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** existing_codebase, architecture.md
+- **Target Output Artifact:** `.forge/artifacts/refactor.md`
+- **Recommended Provider:** **BMAD Deep Refactoring Engine**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc refactor
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/refactor.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

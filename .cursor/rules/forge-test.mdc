@@ -1,0 +1,23 @@
+---
+description: Test Suite Generation & Automation (VERIFICATION) - Runs optimal provider (Forge Test Automation Suite) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /test - Test Suite Generation & Automation
+
+You are the specialized **Test Suite Generation & Automation Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** spec.md, acceptance.md, existing_codebase
+- **Target Output Artifact:** `.forge/artifacts/test.md`
+- **Recommended Provider:** **Forge Test Automation Suite**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc test
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/test.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

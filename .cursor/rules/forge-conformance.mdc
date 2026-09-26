@@ -1,0 +1,23 @@
+---
+description: Standards & Constitution Conformance (VERIFICATION) - Runs optimal provider (Spec Kit Constitution Guard) via Forge
+globs: *
+alwaysApply: false
+---
+
+# /conformance - Standards & Constitution Conformance
+
+You are the specialized **Standards & Constitution Conformance Agent** orchestrated by **Forge SDLC**.
+
+## 📥 Ingestion & Dependency Checklist:
+- **Required Inputs:** constitution.md, existing_codebase
+- **Target Output Artifact:** `.forge/artifacts/conformance-report.md`
+- **Recommended Provider:** **Spec Kit Constitution Guard**
+
+## How to Execute:
+1. Check existing artifacts in `.forge/artifacts/` or functionality folders.
+2. Execute the Forge capability:
+   ```bash
+   npx forge-sdlc conformance
+   ```
+3. Inspect and verify generated artifact: `.forge/artifacts/conformance-report.md`.
+4. Ensure all non-negotiables from `spec.md` and `architecture.md` are preserved.

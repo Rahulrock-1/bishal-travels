@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
+import { api } from '../services/api';
 
 export interface AuthUser {
   name: string;
@@ -9,11 +10,12 @@ export interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   isAuthenticated: boolean;
-  login: (email: string, pass: string) => { success: boolean; error?: string };
+  login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
 const AUTH_STORAGE_KEY = 'bishal_travels_auth_user';
+const AUTH_TOKEN_KEY = 'bishal_travels_token';
 
 // Authorized Master Credentials
 export const MASTER_EMAIL = 'biswajitpramanikrock@gmail.com';
@@ -34,10 +36,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
 
-  const login = (email: string, pass: string) => {
+  const login = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     const trimmedEmail = email.trim().toLowerCase();
     const targetEmail = MASTER_EMAIL.toLowerCase();
 
+    // 1. Attempt API login
+    try {
+      const response = await api.auth.login(email, pass);
+      if (response && response.success && response.user) {
+        const authUser: AuthUser = response.user;
+        setUser(authUser);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+        if (response.token) {
+          localStorage.setItem(AUTH_TOKEN_KEY, response.token);
+        }
+        return { success: true };
+      }
+    } catch (err) {
+      console.warn('Backend login unavailable or errored, trying master fallback:', err);
+    }
+
+    // 2. Offline / Master credential fallback
     if (trimmedEmail === targetEmail && pass === MASTER_PASSWORD) {
       const authUser: AuthUser = {
         name: 'Biswajit Pramanik',
@@ -58,6 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
   };
 
   return (
