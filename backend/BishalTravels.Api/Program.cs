@@ -30,6 +30,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 builder.Services.AddHttpClient("ServerSideProxyClient");
+builder.Services.AddHttpForwarder();
 
 // 3. Add MVC Controllers & JSON Formatting
 builder.Services.AddControllers()
@@ -261,6 +262,10 @@ app.MapGet("/api/health", async (BishalTravelsDbContext dbContext) =>
         }, statusCode: 503);
     }
 }).AllowAnonymous();
+
+// 15. Server-Side Reverse Proxy to RabbitMQ Management UI
+app.MapGet("/rabbitmq", () => Results.Redirect("/rabbitmq/"));
+app.MapForwarder("/rabbitmq/{**catch-all}", "http://127.0.0.1:15672");
 
 app.MapControllers();
 
