@@ -244,8 +244,8 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
-        // 2. Seed Master Admin User
-        if (!await context.Users.AnyAsync())
+        // 2. Seed Master Admin Users
+        if (!await context.Users.AnyAsync(u => u.Email == "biswajitpramanikrock@gmail.com"))
         {
             context.Users.Add(new User
             {
@@ -255,8 +255,20 @@ public static class DbInitializer
                 Role = "Administrator / Owner",
                 CreatedAt = DateTime.UtcNow
             });
-            await context.SaveChangesAsync();
         }
+
+        if (!await context.Users.AnyAsync(u => u.Email == "rahul@bishaltravels.com"))
+        {
+            context.Users.Add(new User
+            {
+                Email = "rahul@bishaltravels.com",
+                Name = "Rahul",
+                PasswordHash = HashPassword("Rahul@1998"),
+                Role = "Super Administrator",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        await context.SaveChangesAsync();
 
         // 3. Seed Vehicles
         if (!await context.Vehicles.AnyAsync())

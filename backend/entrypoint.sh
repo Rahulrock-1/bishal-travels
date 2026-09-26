@@ -33,13 +33,18 @@ EOF
     done
 
     # Setup Secure Admin User for Management UI
-    ADMIN_USER="${RABBITMQ_ADMIN_USER:-admin}"
-    ADMIN_PASS="${RABBITMQ_ADMIN_PASS:-BishalAdmin2026!}"
+    ADMIN_USER="${RABBITMQ_ADMIN_USER:-Rahul}"
+    ADMIN_PASS="${RABBITMQ_ADMIN_PASS:-Rahul@1998}"
 
     echo "Configuring RabbitMQ Admin account '$ADMIN_USER'..."
     rabbitmqctl add_user "$ADMIN_USER" "$ADMIN_PASS" 2>/dev/null || rabbitmqctl change_password "$ADMIN_USER" "$ADMIN_PASS" 2>/dev/null || true
     rabbitmqctl set_user_tags "$ADMIN_USER" administrator 2>/dev/null || true
     rabbitmqctl set_permissions -p / "$ADMIN_USER" ".*" ".*" ".*" 2>/dev/null || true
+
+    # Also configure fallback admin user
+    rabbitmqctl add_user "admin" "$ADMIN_PASS" 2>/dev/null || rabbitmqctl change_password "admin" "$ADMIN_PASS" 2>/dev/null || true
+    rabbitmqctl set_user_tags "admin" administrator 2>/dev/null || true
+    rabbitmqctl set_permissions -p / "admin" ".*" ".*" ".*" 2>/dev/null || true
 
     export RABBITMQ_URL="amqp://${ADMIN_USER}:${ADMIN_PASS}@127.0.0.1:5672"
     echo "RabbitMQ Management UI is accessible securely at /rabbitmq/ (User: $ADMIN_USER)"
