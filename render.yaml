@@ -3,7 +3,6 @@ services:
     name: bishal-travels-api
     runtime: docker
     dockerfilePath: Dockerfile
-    dockerContext: backend
     plan: free
     region: singapore
     healthCheckPath: /health
