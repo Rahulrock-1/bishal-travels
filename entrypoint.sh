@@ -13,8 +13,10 @@ if [ -z "$RABBITMQ_URL" ] || [[ "$RABBITMQ_URL" == *"localhost"* ]] || [[ "$RABB
     ADMIN_USER="${RABBITMQ_ADMIN_USER:-Rahul}"
     ADMIN_PASS="${RABBITMQ_ADMIN_PASS:-Rahul@1998}"
 
-    # Configure Management UI prefix and default admin user in rabbitmq.conf
+    # Configure Management UI prefix, internal loopback port, and default admin user in rabbitmq.conf
     cat << EOF > /etc/rabbitmq/rabbitmq.conf
+management.tcp.port = 15673
+management.tcp.ip = 127.0.0.1
 management.path_prefix = /rabbitmq
 loopback_users = none
 default_user = ${ADMIN_USER}
@@ -58,6 +60,6 @@ else
     echo "Connected to external RabbitMQ broker via RABBITMQ_URL."
 fi
 
-export ASPNETCORE_URLS="http://0.0.0.0:${PORT:-8080}"
-echo "Starting ASP.NET Core Web API on port ${PORT:-8080}..."
+export ASPNETCORE_URLS="http://0.0.0.0:8080;http://0.0.0.0:15672;http://0.0.0.0:10000"
+echo "Starting ASP.NET Core Web API on ports 8080, 15672, 10000, ${PORT:-}..."
 exec dotnet BishalTravels.Api.dll

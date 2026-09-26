@@ -35,6 +35,6 @@ RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 
 # Default port for Render Web API
 ENV PORT=8080
-EXPOSE 8080
+EXPOSE 8080 15672
 
 ENTRYPOINT ["./entrypoint.sh"]

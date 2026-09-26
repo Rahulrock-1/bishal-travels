@@ -18,9 +18,14 @@ using BishalTravels.Api.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Dynamic Port Configuration for Render ($PORT)
-var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+// 1. Dynamic Multi-Port Configuration for Render ($PORT, 8080, 10000, 15672)
+var portList = new HashSet<string> { "http://0.0.0.0:8080", "http://0.0.0.0:15672", "http://0.0.0.0:10000" };
+var envPort = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(envPort) && int.TryParse(envPort, out _))
+{
+    portList.Add($"http://0.0.0.0:{envPort}");
+}
+builder.WebHost.UseUrls(portList.ToArray());
 
 // 2. Server-Side Reverse Proxy (Forwarded Headers) & HTTP Client
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -260,7 +265,7 @@ app.MapGet("/api/health", async (BishalTravelsDbContext dbContext) =>
 
 // 15. Server-Side Reverse Proxy to RabbitMQ Management UI
 app.MapGet("/rabbitmq", () => Results.Redirect("/rabbitmq/"));
-app.MapForwarder("/rabbitmq/{**catch-all}", "http://127.0.0.1:15672");
+app.MapForwarder("/rabbitmq/{**catch-all}", "http://127.0.0.1:15673");
 
 // 16. Root Discovery Endpoint
 app.MapGet("/", () => Results.Json(new
