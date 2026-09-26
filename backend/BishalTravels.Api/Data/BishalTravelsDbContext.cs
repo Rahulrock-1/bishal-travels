@@ -80,5 +80,51 @@ public class BishalTravelsDbContext : DbContext
         {
             entity.HasIndex(u => u.Email).IsUnique();
         });
+
+        // PostgreSQL Snake-Case Convention Mapping
+        foreach (var entity in modelBuilder.Model.GetEntityTypes())
+        {
+            var tableName = entity.GetTableName();
+            if (!string.IsNullOrEmpty(tableName))
+            {
+                entity.SetTableName(ToSnakeCase(tableName));
+            }
+
+            foreach (var property in entity.GetProperties())
+            {
+                property.SetColumnName(ToSnakeCase(property.Name));
+            }
+
+            foreach (var key in entity.GetKeys())
+            {
+                var keyName = key.GetName();
+                if (!string.IsNullOrEmpty(keyName))
+                    key.SetName(ToSnakeCase(keyName));
+            }
+
+            foreach (var key in entity.GetForeignKeys())
+            {
+                var constraintName = key.GetConstraintName();
+                if (!string.IsNullOrEmpty(constraintName))
+                    key.SetConstraintName(ToSnakeCase(constraintName));
+            }
+
+            foreach (var index in entity.GetIndexes())
+            {
+                var indexName = index.GetDatabaseName();
+                if (!string.IsNullOrEmpty(indexName))
+                    index.SetDatabaseName(ToSnakeCase(indexName));
+            }
+        }
+    }
+
+    private static string ToSnakeCase(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return input;
+        return System.Text.RegularExpressions.Regex.Replace(
+            input,
+            @"([a-z0-9])([A-Z])",
+            "$1_$2"
+        ).ToLowerInvariant();
     }
 }
