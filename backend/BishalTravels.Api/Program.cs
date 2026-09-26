@@ -267,6 +267,17 @@ app.MapGet("/api/health", async (BishalTravelsDbContext dbContext) =>
 app.MapGet("/rabbitmq", () => Results.Redirect("/rabbitmq/"));
 app.MapForwarder("/rabbitmq/{**catch-all}", "http://127.0.0.1:15672");
 
+// 16. Root Discovery Endpoint
+app.MapGet("/", () => Results.Json(new
+{
+    service = "Bishal Travels Fleet & Invoicing API",
+    status = "Online",
+    version = "1.0.0",
+    docs = "/swagger",
+    health = "/health",
+    rabbitmq = "/rabbitmq/"
+})).AllowAnonymous();
+
 app.MapControllers();
 
 app.Run();

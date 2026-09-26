@@ -33,8 +33,8 @@ COPY --from=publish /app/publish .
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
-# Default ports: 8080 (Web API on Render), 5672 (RabbitMQ AMQP)
+# Default port for Render Web API
 ENV PORT=8080
-EXPOSE 8080 5672 15672
+EXPOSE 8080
 
 ENTRYPOINT ["./entrypoint.sh"]
