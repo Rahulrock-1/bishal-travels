@@ -31,9 +31,11 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // 3. Configure Database Connection (Supabase PostgreSQL / InMemory Fallback)
-var rawConnectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? Environment.GetEnvironmentVariable("DATABASE_URL")
-    ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+var defaultConn = builder.Configuration.GetConnectionString("DefaultConnection");
+var rawConnectionString = !string.IsNullOrWhiteSpace(defaultConn)
+    ? defaultConn
+    : (Environment.GetEnvironmentVariable("DATABASE_URL")
+       ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection"));
 
 var effectiveConnectionString = ConvertDatabaseUrlToNpgsql(rawConnectionString);
 
@@ -116,8 +118,8 @@ static string? ConvertDatabaseUrlToNpgsql(string? databaseUrl)
     {
         var uri = new Uri(databaseUrl);
         var userInfo = uri.UserInfo.Split(':');
-        var username = userInfo.Length > 0 ? userInfo[0] : "";
-        var password = userInfo.Length > 1 ? userInfo[1] : "";
+        var username = userInfo.Length > 0 ? Uri.UnescapeDataString(userInfo[0]) : "";
+        var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "";
         var host = uri.Host;
         var port = uri.Port > 0 ? uri.Port : 5432;
         var database = uri.AbsolutePath.TrimStart('/');
