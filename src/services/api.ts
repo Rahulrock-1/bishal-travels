@@ -8,8 +8,8 @@ import {
 } from '../types';
 import { AppStateData } from '../utils/storage';
 
-// Base API URL configurable via environment variable VITE_API_URL or defaults to localhost / relative /api
-const API_BASE_URL = (((import.meta as any).env?.VITE_API_URL as string | undefined) || 'http://localhost:5000/api').replace(/\/+$/, '');
+// Base API URL configurable via environment variable VITE_API_URL or defaults to live Render backend
+const API_BASE_URL = (((import.meta as any).env?.VITE_API_URL as string | undefined) || 'https://bishal-travels.onrender.com/api').replace(/\/+$/, '');
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem('bishal_travels_token');
