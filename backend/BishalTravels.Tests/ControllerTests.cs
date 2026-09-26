@@ -1,13 +1,17 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using BishalTravels.Api.Common;
 using BishalTravels.Api.Controllers;
 using BishalTravels.Api.Data;
 using BishalTravels.Api.DTOs;
+using BishalTravels.Api.Messaging;
 using BishalTravels.Api.Models;
 using BishalTravels.Api.Repositories;
+using BishalTravels.Api.Security;
 using BishalTravels.Api.Services;
 using BishalTravels.Api.Services.Implementations;
 using BishalTravels.Api.Services.Interfaces;
@@ -19,6 +23,11 @@ public class ControllerTests
     private (BishalTravelsDbContext context, IMediator mediator) CreateTestDependencies(string dbName)
     {
         var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.AddSingleton<IMessageBus, RabbitMqMessageBus>();
+
         services.AddDbContext<BishalTravelsDbContext>(options =>
             options.UseInMemoryDatabase(databaseName: dbName));
 
@@ -277,5 +286,41 @@ public class ControllerTests
         Assert.NotNull(reloadedSlip);
         Assert.Equal("Billed", reloadedSlip.Status);
         Assert.Equal(createdInvoice.Id, reloadedSlip.InvoiceId);
+    }
+
+    [Fact]
+    public async Task AuthController_GeneratesValidJwtToken_OnLogin()
+    {
+        var (context, mediator) = CreateTestDependencies(nameof(AuthController_GeneratesValidJwtToken_OnLogin));
+        await DbInitializer.InitializeAsync(context);
+
+        var authController = new AuthController(mediator);
+        var loginRequest = new LoginRequest("biswajitpramanikrock@gmail.com", "Biswajit@1989");
+
+        var loginResult = await authController.Login(loginRequest);
+        var okResult = Assert.IsType<OkObjectResult>(loginResult.Result);
+        var response = Assert.IsType<LoginResponse>(okResult.Value);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Token);
+        Assert.NotNull(response.User);
+        Assert.Equal("Biswajit Pramanik", response.User.Name);
+
+        // Verify JWT format: header.payload.signature
+        var tokenParts = response.Token.Split('.');
+        Assert.Equal(3, tokenParts.Length);
+    }
+
+    [Fact]
+    public void JwtTokenGenerator_ProducesValidSignedToken()
+    {
+        var config = new ConfigurationBuilder().Build();
+        var generator = new JwtTokenGenerator(config);
+
+        var token = generator.GenerateToken(10, "admin@bishal.com", "Admin User", "Administrator");
+
+        Assert.NotNull(token);
+        var parts = token.Split('.');
+        Assert.Equal(3, parts.Length);
     }
 }

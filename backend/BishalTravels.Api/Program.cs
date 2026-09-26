@@ -1,10 +1,17 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using BishalTravels.Api.Common;
 using BishalTravels.Api.Data;
+using BishalTravels.Api.Messaging;
 using BishalTravels.Api.Middleware;
 using BishalTravels.Api.Repositories;
+using BishalTravels.Api.Security;
 using BishalTravels.Api.Services;
 using BishalTravels.Api.Services.Implementations;
 using BishalTravels.Api.Services.Interfaces;
@@ -15,7 +22,16 @@ var builder = WebApplication.CreateBuilder(args);
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
-// 2. Add MVC Controllers & JSON Formatting
+// 2. Server-Side Reverse Proxy (Forwarded Headers) & HTTP Client
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+builder.Services.AddHttpClient("ServerSideProxyClient");
+
+// 3. Add MVC Controllers & JSON Formatting
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -24,18 +40,86 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
+// 4. JWT Authentication & Authorization ("Without authentication no one can access")
+var secretKey = builder.Configuration["Jwt:Key"] 
+    ?? Environment.GetEnvironmentVariable("JWT_SECRET_KEY") 
+    ?? JwtTokenGenerator.DefaultSecretKey;
+
+var issuer = builder.Configuration["Jwt:Issuer"] 
+    ?? Environment.GetEnvironmentVariable("JWT_ISSUER") 
+    ?? JwtTokenGenerator.DefaultIssuer;
+
+var audience = builder.Configuration["Jwt:Audience"] 
+    ?? Environment.GetEnvironmentVariable("JWT_AUDIENCE") 
+    ?? JwtTokenGenerator.DefaultAudience;
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = issuer,
+        ValidateAudience = true,
+        ValidAudience = audience,
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
+    };
+});
+
+builder.Services.AddAuthorization();
+builder.Services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
+
+// 5. RabbitMQ Event Bus & Background Worker
+builder.Services.AddSingleton<IMessageBus, RabbitMqMessageBus>();
+builder.Services.AddHostedService<RabbitMqEventConsumer>();
+
+// 6. Swagger API Documentation with JWT Bearer Security
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new()
     {
-        c.SwaggerDoc("v1", new()
-        {
-            Title = "Bishal Travels Fleet & Invoice API (Clean Architecture & CQRS)",
-            Version = "v1",
-            Description = "Decoupled Clean Architecture with CQRS, Unit of Work, Repository Layer, and Custom Middlewares for Bishal Travels Fleet & Corporate Invoicing."
-        });
+        Title = "Bishal Travels Fleet & Invoice API (Clean Architecture & CQRS)",
+        Version = "v1",
+        Description = "Decoupled Clean Architecture with CQRS, Unit of Work, Repository Layer, JWT Authentication, RabbitMQ Message Queue, and Server-Side Proxy."
     });
 
-// 3. Configure Database Connection (Supabase PostgreSQL / InMemory Fallback)
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter JWT Bearer token: Bearer {your token}"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
+// 7. Configure Database Connection (Supabase PostgreSQL / InMemory Fallback)
 var defaultConn = builder.Configuration.GetConnectionString("DefaultConnection");
 var rawConnectionString = !string.IsNullOrWhiteSpace(defaultConn)
     ? defaultConn
@@ -60,7 +144,7 @@ else
         options.UseInMemoryDatabase("BishalTravelsDevDb"));
 }
 
-// 4. Data Access Layer (Repositories & Unit of Work)
+// 8. Data Access Layer (Repositories & Unit of Work)
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
 builder.Services.AddScoped<IClientRepository, ClientRepository>();
@@ -70,7 +154,7 @@ builder.Services.AddScoped<ICompanyProfileRepository, CompanyProfileRepository>(
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
-// 5. Domain & Application Services
+// 9. Domain & Application Services
 builder.Services.AddScoped<ICalculationService, CalculationService>();
 builder.Services.AddScoped<ICompanyService, CompanyService>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
@@ -81,10 +165,10 @@ builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IBackupService, BackupService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
-// 6. CQRS Mediator & Request Handlers Registration
+// 10. CQRS Mediator & Request Handlers Registration
 builder.Services.AddCqrs(typeof(Program).Assembly);
 
-// 7. CORS Policy
+// 11. CORS Policy
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAllOrigins", policy =>
@@ -98,7 +182,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// 8. Database Auto-Migration & Seed on Startup
+// 12. Database Auto-Migration & Seed on Startup
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -114,7 +198,8 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// 9. HTTP Pipeline Middlewares
+// 13. HTTP Pipeline Middlewares
+app.UseForwardedHeaders(); // Server-side reverse proxy header forwarding
 app.UseCustomMiddlewares(); // Global Exception Handling + Request Logging & Timing Header
 app.UseCors("AllowAllOrigins");
 
@@ -126,6 +211,7 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using BishalTravels.Api.Common;
 using BishalTravels.Api.Features;
@@ -6,6 +7,7 @@ namespace BishalTravels.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class ReportsController : ControllerBase
 {
     private readonly IMediator _mediator;

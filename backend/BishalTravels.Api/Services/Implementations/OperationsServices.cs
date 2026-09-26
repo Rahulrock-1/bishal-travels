@@ -2,8 +2,10 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using BishalTravels.Api.Data;
 using BishalTravels.Api.DTOs;
+using BishalTravels.Api.Messaging;
 using BishalTravels.Api.Models;
 using BishalTravels.Api.Repositories;
+using BishalTravels.Api.Security;
 using BishalTravels.Api.Services.Interfaces;
 
 namespace BishalTravels.Api.Services.Implementations;
@@ -13,11 +15,13 @@ public class DutySlipService : IDutySlipService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICalculationService _calcService;
+    private readonly IMessageBus _messageBus;
 
-    public DutySlipService(IUnitOfWork unitOfWork, ICalculationService calcService)
+    public DutySlipService(IUnitOfWork unitOfWork, ICalculationService calcService, IMessageBus messageBus)
     {
         _unitOfWork = unitOfWork;
         _calcService = calcService;
+        _messageBus = messageBus;
     }
 
     public async Task<IReadOnlyList<DutySlip>> GetDutySlipsAsync(string? status, string? clientId, string? vehicleId)
@@ -98,6 +102,15 @@ public class DutySlipService : IDutySlipService
 
         await _unitOfWork.DutySlips.AddAsync(dutySlip);
         await _unitOfWork.CommitAsync();
+
+        await _messageBus.PublishAsync("dutyslips.created", new DutySlipCreatedEvent(
+            dutySlip.Id,
+            dutySlip.DutySlipNo,
+            dutySlip.VehicleId,
+            dutySlip.ClientId,
+            dutySlip.TotalKm,
+            DateTime.UtcNow
+        ));
 
         return (await _unitOfWork.DutySlips.GetWithRelationsAsync(dutySlip.Id))!;
     }
@@ -185,11 +198,13 @@ public class InvoiceService : IInvoiceService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICalculationService _calcService;
+    private readonly IMessageBus _messageBus;
 
-    public InvoiceService(IUnitOfWork unitOfWork, ICalculationService calcService)
+    public InvoiceService(IUnitOfWork unitOfWork, ICalculationService calcService, IMessageBus messageBus)
     {
         _unitOfWork = unitOfWork;
         _calcService = calcService;
+        _messageBus = messageBus;
     }
 
     public async Task<IReadOnlyList<InvoiceResponseDto>> GetInvoicesAsync(string? status, string? month, string? clientId)
@@ -332,6 +347,15 @@ public class InvoiceService : IInvoiceService
 
         await _unitOfWork.CommitAsync();
 
+        await _messageBus.PublishAsync("invoices.created", new InvoiceCreatedEvent(
+            invoiceId,
+            invoiceNo,
+            dto.ClientId,
+            grandTotal,
+            dto.BillingMonth,
+            DateTime.UtcNow
+        ));
+
         var createdInvoice = await _unitOfWork.Invoices.GetWithItemsAndClientAsync(invoiceId);
         return MapToResponseDto(createdInvoice!);
     }
@@ -401,6 +425,13 @@ public class InvoiceService : IInvoiceService
         invoice.UpdatedAt = DateTime.UtcNow;
         await _unitOfWork.Invoices.UpdateAsync(invoice);
         await _unitOfWork.CommitAsync();
+
+        await _messageBus.PublishAsync("invoices.status_updated", new InvoiceStatusUpdatedEvent(
+            id,
+            status,
+            DateTime.UtcNow
+        ));
+
         return true;
     }
 
@@ -900,10 +931,12 @@ public class BackupService : IBackupService
 public class AuthService : IAuthService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IJwtTokenGenerator _jwtTokenGenerator;
 
-    public AuthService(IUnitOfWork unitOfWork)
+    public AuthService(IUnitOfWork unitOfWork, IJwtTokenGenerator jwtTokenGenerator)
     {
         _unitOfWork = unitOfWork;
+        _jwtTokenGenerator = jwtTokenGenerator;
     }
 
     public async Task<LoginResponse> LoginAsync(LoginRequest request)
@@ -920,7 +953,7 @@ public class AuthService : IAuthService
         if (user != null && DbInitializer.VerifyPassword(request.Password, user.PasswordHash))
         {
             var authUser = new AuthUserDto(user.Name, user.Email, user.Role);
-            var token = Guid.NewGuid().ToString("N");
+            var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email, user.Name, user.Role);
             return new LoginResponse(true, null, authUser, token);
         }
 
@@ -928,7 +961,7 @@ public class AuthService : IAuthService
         if (normalizedEmail == "biswajitpramanikrock@gmail.com" && request.Password == "Biswajit@1989")
         {
             var authUser = new AuthUserDto("Biswajit Pramanik", "biswajitpramanikrock@gmail.com", "Administrator / Owner");
-            var token = Guid.NewGuid().ToString("N");
+            var token = _jwtTokenGenerator.GenerateToken(1, "biswajitpramanikrock@gmail.com", "Biswajit Pramanik", "Administrator / Owner");
             return new LoginResponse(true, null, authUser, token);
         }
 

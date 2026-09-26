@@ -7,42 +7,12 @@ import {
   InvoiceStatus 
 } from '../types';
 import { AppStateData } from '../utils/storage';
+import { clientProxy } from './clientProxy';
 
-// Base API URL configurable via environment variable VITE_API_URL or defaults to live Render backend
-const API_BASE_URL = (((import.meta as any).env?.VITE_API_URL as string | undefined) || 'https://bishal-travels.onrender.com/api').replace(/\/+$/, '');
+const API_BASE_URL = clientProxy.getBaseUrl();
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('bishal_travels_token');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options?.headers as Record<string, string> || {})
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`${API_BASE_URL}${url}`, {
-    ...options,
-    headers
-  });
-
-  if (!response.ok) {
-    let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
-    try {
-      const errorJson = await response.json();
-      if (errorJson.message) errorMsg = errorJson.message;
-    } catch {
-      // ignore
-    }
-    throw new Error(errorMsg);
-  }
-
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  return response.json();
+  return clientProxy.request<T>(url, options);
 }
 
 export const api = {
@@ -194,5 +164,13 @@ export const api = {
       fetchJson<{ message: string }>('/backup/reset', {
         method: 'POST'
       })
+  },
+
+  // Server-Side Proxy
+  proxy: {
+    forward: (targetUrl: string) => 
+      fetchJson<any>(`/proxy/forward?targetUrl=${encodeURIComponent(targetUrl)}`),
+    getStatus: () => 
+      fetchJson<{ proxy: string; status: string; forwardedFor?: string; forwardedProto?: string; whitelistedHosts?: string[] }>('/proxy/status')
   }
 };

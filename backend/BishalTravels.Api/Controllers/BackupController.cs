@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using BishalTravels.Api.Common;
 using BishalTravels.Api.DTOs;
@@ -7,6 +8,7 @@ namespace BishalTravels.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class BackupController : ControllerBase
 {
     private readonly IMediator _mediator;
