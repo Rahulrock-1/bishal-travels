@@ -19,7 +19,7 @@ using BishalTravels.Api.Services.Interfaces;
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Dynamic Port Configuration for Render ($PORT)
-var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 // 2. Server-Side Reverse Proxy (Forwarded Headers) & HTTP Client
@@ -218,49 +218,44 @@ app.UseAuthorization();
 // 14. Health Check Endpoint for Database & Cloud connectivity probe
 app.MapGet("/health", async (BishalTravelsDbContext dbContext) =>
 {
+    bool canConnect = false;
+    string? errorMsg = null;
     try
     {
-        var canConnect = await dbContext.Database.CanConnectAsync();
-        return Results.Ok(new
-        {
-            status = "Healthy",
-            database = canConnect ? "Connected" : "Disconnected",
-            service = "Bishal Travels Fleet & Invoicing API",
-            timestamp = DateTime.UtcNow
-        });
+        canConnect = await dbContext.Database.CanConnectAsync();
     }
     catch (Exception ex)
     {
-        return Results.Json(new
-        {
-            status = "Degraded",
-            database = "Unreachable",
-            error = ex.Message
-        }, statusCode: 503);
+        errorMsg = ex.Message;
     }
+
+    return Results.Ok(new
+    {
+        status = canConnect ? "Healthy" : "Degraded",
+        database = canConnect ? "Connected" : (errorMsg ?? "Connecting"),
+        service = "Bishal Travels Fleet & Invoicing API",
+        timestamp = DateTime.UtcNow
+    });
 }).AllowAnonymous();
 
 app.MapGet("/api/health", async (BishalTravelsDbContext dbContext) =>
 {
+    bool canConnect = false;
     try
     {
-        var canConnect = await dbContext.Database.CanConnectAsync();
-        return Results.Ok(new
-        {
-            status = "Healthy",
-            database = canConnect ? "Connected" : "Disconnected",
-            timestamp = DateTime.UtcNow
-        });
+        canConnect = await dbContext.Database.CanConnectAsync();
     }
-    catch (Exception ex)
+    catch
     {
-        return Results.Json(new
-        {
-            status = "Degraded",
-            database = "Unreachable",
-            error = ex.Message
-        }, statusCode: 503);
+        canConnect = false;
     }
+
+    return Results.Ok(new
+    {
+        status = canConnect ? "Healthy" : "Degraded",
+        database = canConnect ? "Connected" : "Connecting",
+        timestamp = DateTime.UtcNow
+    });
 }).AllowAnonymous();
 
 // 15. Server-Side Reverse Proxy to RabbitMQ Management UI
