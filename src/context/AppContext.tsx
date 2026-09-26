@@ -96,7 +96,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }));
         setIsCloudConnected(true);
       } else {
-        setIsCloudConnected(false);
+        // Fallback: check public health endpoint
+        try {
+          const health = await api.checkHealth();
+          if (health && (health.status === 'Healthy' || health.status === 'Degraded')) {
+            setIsCloudConnected(true);
+          } else {
+            setIsCloudConnected(false);
+          }
+        } catch {
+          setIsCloudConnected(false);
+        }
       }
     } catch (err) {
       console.warn('API currently unreachable, using LocalStorage state:', err);
@@ -114,8 +124,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     window.addEventListener('auth:login', onAuthLogin);
-    return () => window.removeEventListener('auth:login', onAuthLogin);
-  }, [refreshFromCloud]);
+
+    // Auto-reconnect polling every 12s if currently disconnected
+    const retryTimer = setInterval(() => {
+      if (!isCloudConnected) {
+        refreshFromCloud();
+      }
+    }, 12000);
+
+    return () => {
+      window.removeEventListener('auth:login', onAuthLogin);
+      clearInterval(retryTimer);
+    };
+  }, [refreshFromCloud, isCloudConnected]);
 
   const updateCompany = (profile: Partial<CompanyProfile>) => {
     const updatedCompany = { ...data.company, ...profile, isConfigured: true };
