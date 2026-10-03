@@ -36,10 +36,12 @@ public class CalculationService : ICalculationService
                 // Overnight duty
                 diff = diff.Add(TimeSpan.FromHours(24));
             }
-            totalHours = Math.Round((decimal)diff.TotalHours, 2);
+            // Transport rule: Fractional hours round UP (e.g. 14.01 -> 15, 14.83 -> 15)
+            totalHours = Math.Ceiling((decimal)diff.TotalHours);
         }
 
-        var extraHours = Math.Max(0, totalHours - standardHoursPerDay);
+        // Overtime hours round UP (e.g. 2.01 -> 3, 2.83 -> 3)
+        var extraHours = Math.Max(0, Math.Ceiling(totalHours - standardHoursPerDay));
 
         return (totalKm, totalHours, extraHours);
     }

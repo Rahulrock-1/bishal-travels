@@ -22,7 +22,7 @@ import { DutyAnnexurePrintTemplate } from './DutyAnnexurePrintTemplate';
 import { BishalMonthlyInvoicePdfTemplate, DailyReportRow } from './BishalMonthlyInvoicePdfTemplate';
 import { downloadInvoiceAsPdf, triggerPrint } from '../../utils/pdfGenerator';
 import { formatDate } from '../../utils/formatters';
-import { computeGarageKm } from '../../utils/calculations';
+import { computeGarageKm, ceilHours } from '../../utils/calculations';
 
 export const InvoiceViewModal: React.FC = () => {
   const { 
@@ -128,8 +128,8 @@ export const InvoiceViewModal: React.FC = () => {
       const slip = slipDateMap.get(dateStr);
 
       if (slip) {
-        const hours = slip.totalHours || 0;
-        const extraHours = slip.extraHours !== undefined ? slip.extraHours : Math.max(0, hours - 10);
+        const hours = ceilHours(slip.totalHours);
+        const extraHours = slip.extraHours !== undefined ? ceilHours(slip.extraHours) : Math.max(0, hours - 10);
         const km = slip.totalKm || 0;
         const startKm = slip.startKm || 0;
         const endKm = slip.endKm || 0;

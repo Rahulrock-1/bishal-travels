@@ -33,6 +33,35 @@ public class CalculationServiceTests
     }
 
     [Fact]
+    public void CalculateTripMetrics_CeilsFractionalHoursAndOvertimeToNextWholeHour()
+    {
+        // Case 1: 14.83 hours duty (08:00 to 22:50 = 14h 50m) -> 15 total hours, 3 overtime hours beyond 12 standard hours
+        var (_, hours1, ot1) = _service.CalculateTripMetrics(0, 100, "08:00", "22:50", 12.0m);
+        Assert.Equal(15.0m, hours1);
+        Assert.Equal(3.0m, ot1);
+
+        // Case 2: 14.01 hours duty (08:00 to 22:01 = 14h 1m) -> 15 total hours, 3 overtime hours beyond 12 standard hours
+        var (_, hours2, ot2) = _service.CalculateTripMetrics(0, 100, "08:00", "22:01", 12.0m);
+        Assert.Equal(15.0m, hours2);
+        Assert.Equal(3.0m, ot2);
+
+        // Case 3: 2.83 overtime hours (08:00 to 20:50 = 12h 50m with 10 standard hours) -> 13 total hours, 3 overtime hours
+        var (_, hours3, ot3) = _service.CalculateTripMetrics(0, 100, "08:00", "20:50", 10.0m);
+        Assert.Equal(13.0m, hours3);
+        Assert.Equal(3.0m, ot3);
+
+        // Case 4: 2.01 overtime hours (08:00 to 20:01 = 12h 1m with 10 standard hours) -> 13 total hours, 3 overtime hours
+        var (_, hours4, ot4) = _service.CalculateTripMetrics(0, 100, "08:00", "20:01", 10.0m);
+        Assert.Equal(13.0m, hours4);
+        Assert.Equal(3.0m, ot4);
+
+        // Case 5: Exact 14.00 hours duty (08:00 to 22:00 = exactly 14h 0m with 12 standard hours) -> exactly 14 total hours, 2 overtime hours
+        var (_, hours5, ot5) = _service.CalculateTripMetrics(0, 100, "08:00", "22:00", 12.0m);
+        Assert.Equal(14.0m, hours5);
+        Assert.Equal(2.0m, ot5);
+    }
+
+    [Fact]
     public void CalculateInvoiceFinancials_ComputesIntrastateGstAndTdsCorrectly()
     {
         // Subtotal: 50,000, GST: 5% (Intrastate -> 2.5% CGST + 2.5% SGST), TDS: 2%, Advance: 10,000

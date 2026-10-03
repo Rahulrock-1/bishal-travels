@@ -1,6 +1,24 @@
 import { DutySlip, InvoiceItem, TaxType } from '../types';
 
 /**
+ * Rounds fractional hours up to the next full integer hour.
+ * Transport industry billing rule: Any minute past the hour counts as a full hour.
+ * E.g.:
+ * - 14.83 -> 15
+ * - 14.01 -> 15
+ * - 14.00 -> 14
+ * - 2.83 -> 3
+ * - 2.01 -> 3
+ * - 2.00 -> 2
+ */
+export function ceilHours(hours: number | undefined | null): number {
+  if (hours === undefined || hours === null || isNaN(Number(hours))) return 0;
+  const num = Number(hours);
+  if (num <= 0) return 0;
+  return Math.ceil(num);
+}
+
+/**
  * Calculates duty slip totals
  */
 export function calculateDutySlipMetrics(data: {
@@ -32,8 +50,10 @@ export function calculateDutySlipMetrics(data: {
       }
 
       const diffMinutes = endMinutes - startMinutes;
-      totalHours = Math.round((diffMinutes / 60) * 10) / 10;
-      extraHours = Math.max(0, Math.round((totalHours - baseDutyHours) * 10) / 10);
+      // Transport rule: Fractional hours round UP (e.g. 14.01 -> 15, 14.83 -> 15)
+      totalHours = Math.ceil(diffMinutes / 60);
+      // Overtime hours round UP (e.g. 2.01 -> 3, 2.83 -> 3)
+      extraHours = Math.max(0, Math.ceil(totalHours - baseDutyHours));
     }
   }
 
@@ -195,7 +215,7 @@ export function computeRowTotalHighestExtra(params: {
   const extraKm = Math.max(0, km - baseDutyKm);
   const extraKmCost = extraKm * ratePerKm;
 
-  const otHrs = extraHours !== undefined ? Number(extraHours) : Math.max(0, totalHours - baseDutyHours);
+  const otHrs = extraHours !== undefined ? ceilHours(extraHours) : Math.max(0, ceilHours(totalHours) - baseDutyHours);
   const extraHourCost = otHrs * overtimeRatePerHour;
 
   const highestExtraCost = Math.max(extraKmCost, extraHourCost);
@@ -258,8 +278,8 @@ export function computeRowTotalBothKmAndOt(params: {
     kmCharge = km * ratePerKm;
   }
 
-  // Overtime charges: directly from editable extraHours, or derived from total hours
-  const otHrs = extraHours !== undefined ? Number(extraHours) : Math.max(0, totalHours - (baseDutyHours || 10));
+  // Overtime charges: directly from editable extraHours, or derived from total hours (ceiled)
+  const otHrs = extraHours !== undefined ? ceilHours(extraHours) : Math.max(0, ceilHours(totalHours) - (baseDutyHours || 10));
   const otCharge = otHrs * overtimeRatePerHour;
 
   // Garage run charges

@@ -28,6 +28,7 @@ import { useApp } from '../../context/AppContext';
 import { DutySlip } from '../../types';
 import { 
   calculateDutySlipMetrics, 
+  ceilHours,
   computeRowTotalHighestExtra, 
   computeRowTotalBothKmAndOt,
   computeGarageKm,
@@ -182,8 +183,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       garageKm: Number(r.garageKm) || 0,
       startTime: r.startTime || '',
       endTime: r.endTime || '',
-      totalHours: Number(r.totalHours) || 0,
-      extraHours: Number(r.extraHours) || 0,
+      totalHours: ceilHours(r.totalHours),
+      extraHours: ceilHours(r.extraHours),
       nightCharges: Number(r.nightCharges) || 0,
       parkingCharges: Number(r.parkingCharges) || 0,
       tollCharges: Number(r.tollCharges) || 0,
@@ -483,9 +484,9 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
         // DO NOT overwrite saved 0 or custom KM with carDefaultKm!
         const kmVal = Number(existing.totalKm) || 0;
-        const hrsVal = Number(existing.totalHours) || 0;
+        const hrsVal = ceilHours(existing.totalHours);
         const extraHrs = existing.extraHours !== undefined && existing.extraHours !== null
-          ? Number(existing.extraHours)
+          ? ceilHours(existing.extraHours)
           : (isOff ? 0 : Math.max(0, hrsVal - defaultDutyHours));
         const otCost = extraHrs * overtimeRatePerHour;
         const gOut = Number(existing.garageOutKm) || 0;
@@ -788,8 +789,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         });
 
         row.totalKm = metrics.totalKm;
-        row.totalHours = metrics.totalHours;
-        row.extraHours = Math.max(0, metrics.totalHours - defaultDutyHours);
+        row.totalHours = ceilHours(metrics.totalHours);
+        row.extraHours = Math.max(0, row.totalHours - defaultDutyHours);
         row.overtimeCharges = row.extraHours * overtimeRatePerHour;
       }
 
@@ -800,14 +801,14 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       }
 
       if (field === 'totalHours') {
-        const hrs = Number(val) || 0;
+        const hrs = ceilHours(val);
         row.totalHours = hrs;
         row.extraHours = Math.max(0, hrs - defaultDutyHours);
         row.overtimeCharges = row.extraHours * overtimeRatePerHour;
       }
 
       if (field === 'extraHours') {
-        const otVal = Number(val) || 0;
+        const otVal = ceilHours(val);
         row.extraHours = otVal;
         row.overtimeCharges = otVal * overtimeRatePerHour;
       }
@@ -922,11 +923,12 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     setRows(prev => {
       const updated = prev.map(row => {
         if (row.isOffDay) return row;
-        const otHrs = Math.max(0, (row.totalHours || 0) - defaultDutyHours);
+        const ceiledTotalHrs = ceilHours(row.totalHours);
+        const otHrs = Math.max(0, ceiledTotalHrs - defaultDutyHours);
         const otCost = otHrs * overtimeRatePerHour;
         const total = computeRowTotal(
           row.totalKm,
-          row.totalHours,
+          ceiledTotalHrs,
           otHrs,
           row.nightCharges,
           row.parkingCharges,
@@ -943,6 +945,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         );
         return {
           ...row,
+          totalHours: ceiledTotalHrs,
           extraHours: otHrs,
           overtimeCharges: otCost,
           dayTotalAmount: total,
@@ -1380,8 +1383,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
   // Calculate totals and break-up values
   const totalMonthKm = rows.reduce((sum, r) => sum + (r.totalKm || 0), 0);
-  const totalMonthHours = rows.reduce((sum, r) => sum + (r.totalHours || 0), 0);
-  const totalMonthOvertimeHours = rows.reduce((sum, r) => sum + (Number(r.extraHours) || 0), 0);
+  const totalMonthHours = rows.reduce((sum, r) => sum + (ceilHours(r.totalHours) || 0), 0);
+  const totalMonthOvertimeHours = rows.reduce((sum, r) => sum + (ceilHours(r.extraHours) || 0), 0);
   const totalMonthOvertimeAmount = totalMonthOvertimeHours * overtimeRatePerHour;
   const totalMonthGarageKm = showGarageInOut ? rows.reduce((sum, r) => sum + (Number(r.garageKm) || 0), 0) : 0;
   const totalMonthGarageAmount = showGarageInOut ? totalMonthGarageKm * (garageRatePerKm || ratePerKm) : 0;
@@ -3062,8 +3065,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                   dutySlipNo: r.dutySlipNo,
                   startTime: r.startTime || '',
                   endTime: r.endTime || '',
-                  hours: r.totalHours > 0 ? r.totalHours : '',
-                  extraHours: r.extraHours > 0 ? r.extraHours : '',
+                  hours: ceilHours(r.totalHours) > 0 ? ceilHours(r.totalHours) : '',
+                  extraHours: ceilHours(r.extraHours) > 0 ? ceilHours(r.extraHours) : '',
                   extraDuty: r.extraDuty || '',
                   extraDutyCharges: Number(r.extraDutyCharges) || 0,
                   startKm: r.startKm > 0 ? r.startKm : '',
