@@ -51,6 +51,10 @@ export const InvoiceViewModal: React.FC = () => {
   const [showOvertimeCol, setShowOvertimeCol] = useState(false);
   const [showExtraDutyCol, setShowExtraDutyCol] = useState(false);
   const [hideTotalPrice, setHideTotalPrice] = useState(false);
+  const [isTieredKmEnabled, setIsTieredKmEnabled] = useState(false);
+  const [tier1KmThreshold, setTier1KmThreshold] = useState(2000);
+  const [tier1RatePerKm, setTier1RatePerKm] = useState(19);
+  const [tier2RatePerKm, setTier2RatePerKm] = useState(12);
 
   if (!selectedInvoiceForView) return null;
 
@@ -366,23 +370,82 @@ export const InvoiceViewModal: React.FC = () => {
               </button>
             </div>
 
-            {/* Calculation Mode Toggle */}
+            {/* Calculation Mode & Slab Billing Toggles */}
             {templateFormat !== 'corporate-tax' && (
-              <button
-                type="button"
-                onClick={() => setCalcMode(calcMode === 'both_km_and_overtime' ? 'highest_extra' : 'both_km_and_overtime')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
-                  calcMode === 'both_km_and_overtime'
-                    ? 'bg-emerald-700/90 border-emerald-500 text-white shadow-sm'
-                    : 'bg-slate-800 border-slate-700 text-slate-300'
-                }`}
-                title="Toggle dual calculation mode (both KM & Overtime) vs highest extra"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>Both KM & OT Calc: {calcMode === 'both_km_and_overtime' ? 'ON' : 'OFF'}</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCalcMode(calcMode === 'both_km_and_overtime' ? 'highest_extra' : 'both_km_and_overtime')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                    calcMode === 'both_km_and_overtime'
+                      ? 'bg-emerald-700/90 border-emerald-500 text-white shadow-sm'
+                      : 'bg-slate-800 border-slate-700 text-slate-300'
+                  }`}
+                  title="Toggle dual calculation mode (both KM & Overtime) vs highest extra"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Both KM & OT Calc: {calcMode === 'both_km_and_overtime' ? 'ON' : 'OFF'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsTieredKmEnabled(!isTieredKmEnabled)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                    isTieredKmEnabled
+                      ? 'bg-cyan-700 border-cyan-500 text-white shadow-sm'
+                      : 'bg-slate-800 border-slate-700 text-slate-300'
+                  }`}
+                  title="Toggle Tiered Slab KM Billing (e.g. 2000 KM @ ₹19, excess @ ₹12)"
+                >
+                  <Layers className="w-3.5 h-3.5 text-cyan-300" />
+                  <span>Slab KM: {isTieredKmEnabled ? 'ACTIVE' : 'OFF'}</span>
+                </button>
+              </div>
             )}
           </div>
+
+          {/* Slab KM Dynamic Settings Strip */}
+          {templateFormat !== 'corporate-tax' && isTieredKmEnabled && (
+            <div className="bg-slate-950 border border-cyan-800/50 p-2.5 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="font-bold text-cyan-400 flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5" /> Slab Rates:
+                </span>
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400 text-[11px]">Base KM:</span>
+                  <input
+                    type="number"
+                    value={tier1KmThreshold}
+                    onChange={e => setTier1KmThreshold(Number(e.target.value))}
+                    className="w-16 px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-center text-white font-mono"
+                  />
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400 text-[11px]">Rate 1: ₹</span>
+                  <input
+                    type="number"
+                    value={tier1RatePerKm}
+                    onChange={e => setTier1RatePerKm(Number(e.target.value))}
+                    className="w-14 px-1.5 py-0.5 bg-slate-800 border border-cyan-600 rounded text-center text-cyan-300 font-mono"
+                  />
+                  <span className="text-slate-400 text-[10px]">/KM</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400 text-[11px]">Excess: ₹</span>
+                  <input
+                    type="number"
+                    value={tier2RatePerKm}
+                    onChange={e => setTier2RatePerKm(Number(e.target.value))}
+                    className="w-14 px-1.5 py-0.5 bg-slate-800 border border-amber-600 rounded text-center text-amber-300 font-mono"
+                  />
+                  <span className="text-slate-400 text-[10px]">/KM</span>
+                </div>
+              </div>
+              <div className="text-[11px] font-mono text-cyan-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
+                1st {tier1KmThreshold} KM @ ₹{tier1RatePerKm} + Excess @ ₹{tier2RatePerKm}
+              </div>
+            </div>
+          )}
 
           {/* Column Toggles & Action Buttons Row */}
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -541,6 +604,12 @@ export const InvoiceViewModal: React.FC = () => {
               ratePerKm={bishalReportData.rateKm}
               overtimeRatePerHour={bishalReportData.rateOt}
               garageRatePerKm={bishalReportData.rateGarage}
+              tieredKmConfig={{
+                enabled: isTieredKmEnabled,
+                baseKmThreshold: tier1KmThreshold,
+                tier1Rate: tier1RatePerKm,
+                tier2Rate: tier2RatePerKm,
+              }}
             />
           )}
 

@@ -332,3 +332,64 @@ export function computeGarageKm(
   return Math.round((gOut + gIn) * 10) / 10;
 }
 
+export interface TieredKmConfig {
+  enabled: boolean;
+  baseKmThreshold: number; // e.g. 2000
+  tier1Rate: number;        // e.g. 19
+  tier2Rate: number;        // e.g. 12
+}
+
+export interface TieredKmCalculationResult {
+  tier1Km: number;
+  tier1Rate: number;
+  tier1Amount: number;
+  tier2Km: number;
+  tier2Rate: number;
+  tier2Amount: number;
+  totalKmAmount: number;
+}
+
+/**
+ * Calculates Tiered/Slab Mileage charges (e.g. First 2000 KM @ ₹19/KM, Excess @ ₹12/KM)
+ */
+export function computeTieredKmCharges(
+  totalKm: number,
+  config?: TieredKmConfig
+): TieredKmCalculationResult {
+  const km = Math.max(0, Number(totalKm) || 0);
+  const threshold = Math.max(0, Number(config?.baseKmThreshold) || 2000);
+  const r1 = Math.max(0, Number(config?.tier1Rate) || 19);
+  const r2 = Math.max(0, Number(config?.tier2Rate) || 12);
+
+  if (!config?.enabled) {
+    return {
+      tier1Km: km,
+      tier1Rate: r1,
+      tier1Amount: Math.round(km * r1 * 100) / 100,
+      tier2Km: 0,
+      tier2Rate: r2,
+      tier2Amount: 0,
+      totalKmAmount: Math.round(km * r1 * 100) / 100,
+    };
+  }
+
+  const tier1Km = Math.min(km, threshold);
+  const tier1Amount = Math.round(tier1Km * r1 * 100) / 100;
+
+  const tier2Km = Math.max(0, km - threshold);
+  const tier2Amount = Math.round(tier2Km * r2 * 100) / 100;
+
+  const totalKmAmount = Math.round((tier1Amount + tier2Amount) * 100) / 100;
+
+  return {
+    tier1Km,
+    tier1Rate: r1,
+    tier1Amount,
+    tier2Km,
+    tier2Rate: r2,
+    tier2Amount,
+    totalKmAmount,
+  };
+}
+
+

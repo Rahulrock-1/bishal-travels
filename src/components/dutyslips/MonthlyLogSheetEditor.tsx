@@ -30,7 +30,9 @@ import {
   calculateDutySlipMetrics, 
   computeRowTotalHighestExtra, 
   computeRowTotalBothKmAndOt,
-  computeGarageKm
+  computeGarageKm,
+  computeTieredKmCharges,
+  TieredKmConfig
 } from '../../utils/calculations';
 import { formatCurrency, formatKm, formatDate } from '../../utils/formatters';
 import { BishalMonthlyInvoicePdfTemplate } from '../invoices/BishalMonthlyInvoicePdfTemplate';
@@ -136,6 +138,13 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const [showStartEndKmInPdf, setShowStartEndKmInPdf] = useState<boolean>(false);
   const [showStartEndTimeInPdf, setShowStartEndTimeInPdf] = useState<boolean>(false);
   const [showGarageColsInPdf, setShowGarageColsInPdf] = useState<boolean>(false);
+  
+  // Slab / Tiered KM Billing State (e.g. 2,000 KM @ ₹19/KM, excess KM @ ₹12/KM)
+  const [isTieredKmEnabled, setIsTieredKmEnabled] = useState<boolean>(false);
+  const [tier1KmThreshold, setTier1KmThreshold] = useState<number>(2000);
+  const [tier1RatePerKm, setTier1RatePerKm] = useState<number>(19);
+  const [tier2RatePerKm, setTier2RatePerKm] = useState<number>(12);
+  const [isSlabConfigOpen, setIsSlabConfigOpen] = useState<boolean>(false);
 
   const [rows, setRows] = useState<DailyRowData[]>([]);
 
@@ -460,8 +469,132 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     setRows(generatedRows);
   }, [selectedYear, selectedMonth, selectedVehicleId]);
 
+  // Helper to re-evaluate rows with cumulative slab distribution (e.g. 2000 KM @ ₹19, excess @ ₹12)
+  const recalculateRowsWithCumulativeSlab = useCallback((
+    rawRows: DailyRowData[],
+    enabled: boolean = isTieredKmEnabled,
+    threshold: number = tier1KmThreshold,
+    t1Rate: number = tier1RatePerKm,
+    t2Rate: number = tier2RatePerKm,
+    baseKmRate: number = ratePerKm,
+    otRate: number = overtimeRatePerHour,
+    garageRate: number = garageRatePerKm,
+    baseDutyHrs: number = defaultDutyHours,
+    baseDutyKm: number = defaultBaseKm,
+    mode: 'both_km_and_overtime' | 'highest_extra' = calcMode,
+    enableGarage: boolean = showGarageInOut
+  ): DailyRowData[] => {
+    let cumulativeKm = 0;
+    return rawRows.map(row => {
+      if (row.isOffDay || (row.totalKm || 0) === 0) {
+        return {
+          ...row,
+          dayTotalAmount: 0
+        };
+      }
+
+      const run = Number(row.totalKm) || 0;
+      let effectiveKmRate = baseKmRate;
+
+      if (enabled) {
+        const startCum = cumulativeKm;
+        const endCum = startCum + run;
+        cumulativeKm = endCum;
+
+        const kmInT1 = Math.max(0, Math.min(endCum, threshold) - Math.min(startCum, threshold));
+        const kmInT2 = Math.max(0, endCum - Math.max(startCum, threshold));
+        const kmCost = (kmInT1 * t1Rate) + (kmInT2 * t2Rate);
+        effectiveKmRate = run > 0 ? (kmCost / run) : t1Rate;
+      }
+
+      const otHrs = Number(row.extraHours) || 0;
+      const otCost = otHrs * otRate;
+      const gKm = enableGarage ? (Number(row.garageKm) || 0) : 0;
+      const total = computeRowTotal(
+        run,
+        row.totalHours,
+        otHrs,
+        Number(row.nightCharges) || 0,
+        Number(row.parkingCharges) || 0,
+        Number(row.tollCharges) || 0,
+        Number(row.driverBatta) || 0,
+        effectiveKmRate,
+        otRate,
+        baseDutyHrs,
+        baseDutyKm,
+        gKm,
+        garageRate,
+        Number(row.extraDutyCharges) || 0,
+        mode,
+        enableGarage
+      );
+
+      return {
+        ...row,
+        overtimeCharges: otCost,
+        dayTotalAmount: total
+      };
+    });
+  }, [isTieredKmEnabled, tier1KmThreshold, tier1RatePerKm, tier2RatePerKm, ratePerKm, overtimeRatePerHour, garageRatePerKm, defaultDutyHours, defaultBaseKm, calcMode, showGarageInOut]);
+
+  // Apply Dynamic Tiered / Slab KM Calculation across all days and auto-save
+  const applyTieredSlabCalculation = (
+    enabled: boolean = true,
+    threshold: number = tier1KmThreshold,
+    t1Rate: number = tier1RatePerKm,
+    t2Rate: number = tier2RatePerKm
+  ) => {
+    setIsTieredKmEnabled(enabled);
+    setTier1KmThreshold(threshold);
+    setTier1RatePerKm(t1Rate);
+    setTier2RatePerKm(t2Rate);
+
+    setRows(prev => {
+      const updated = recalculateRowsWithCumulativeSlab(
+        prev,
+        enabled,
+        threshold,
+        t1Rate,
+        t2Rate,
+        ratePerKm,
+        overtimeRatePerHour,
+        garageRatePerKm,
+        defaultDutyHours,
+        defaultBaseKm,
+        calcMode,
+        showGarageInOut
+      );
+      triggerRealtimeAutoSave(updated);
+      return updated;
+    });
+
+    setSaveSuccessMsg(
+      enabled
+        ? `⚡ Slab KM Active: First ${threshold.toLocaleString()} KM @ ₹${t1Rate}, excess @ ₹${t2Rate}/KM. Auto-saved to Database!`
+        : `Slab KM disabled. Reverted to standard rate (@ ₹${ratePerKm}/KM).`
+    );
+    setTimeout(() => setSaveSuccessMsg(null), 3500);
+  };
+
   // Recalculate row totals if user changes ratePerKm, overtimeRatePerHour, garageRatePerKm, defaultDutyHours, defaultBaseKm, calcMode, or showGarageInOut
   useEffect(() => {
+    if (isTieredKmEnabled) {
+      setRows(prev => recalculateRowsWithCumulativeSlab(
+        prev,
+        true,
+        tier1KmThreshold,
+        tier1RatePerKm,
+        tier2RatePerKm,
+        ratePerKm,
+        overtimeRatePerHour,
+        garageRatePerKm,
+        defaultDutyHours,
+        defaultBaseKm,
+        calcMode,
+        showGarageInOut
+      ));
+      return;
+    }
     setRows(prev => prev.map(row => {
       if (row.isOffDay) return row;
       const otCost = (row.extraHours || 0) * overtimeRatePerHour;
@@ -489,7 +622,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         dayTotalAmount: total 
       };
     }));
-  }, [ratePerKm, overtimeRatePerHour, garageRatePerKm, defaultDutyHours, defaultBaseKm, calcMode, showGarageInOut]);
+  }, [isTieredKmEnabled, tier1KmThreshold, tier1RatePerKm, tier2RatePerKm, ratePerKm, overtimeRatePerHour, garageRatePerKm, defaultDutyHours, defaultBaseKm, calcMode, showGarageInOut, recalculateRowsWithCumulativeSlab]);
 
   // Handle single row cell update
   const handleRowChange = (index: number, field: keyof DailyRowData, val: any) => {
@@ -578,6 +711,24 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       );
 
       copy[index] = row;
+      if (isTieredKmEnabled) {
+        const finalRows = recalculateRowsWithCumulativeSlab(
+          copy,
+          true,
+          tier1KmThreshold,
+          tier1RatePerKm,
+          tier2RatePerKm,
+          ratePerKm,
+          overtimeRatePerHour,
+          garageRatePerKm,
+          defaultDutyHours,
+          defaultBaseKm,
+          calcMode,
+          showGarageInOut
+        );
+        triggerRealtimeAutoSave(finalRows);
+        return finalRows;
+      }
       triggerRealtimeAutoSave(copy);
       return copy;
     });
@@ -663,6 +814,10 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
   // One-click recalculation of all KM charges
   const handleRecalculateKm = () => {
+    if (isTieredKmEnabled) {
+      applyTieredSlabCalculation(true, tier1KmThreshold, tier1RatePerKm, tier2RatePerKm);
+      return;
+    }
     setRows(prev => {
       const updated = prev.map(row => {
         if (row.isOffDay) return row;
@@ -1087,13 +1242,27 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const totalMonthOvertimeAmount = totalMonthOvertimeHours * overtimeRatePerHour;
   const totalMonthGarageKm = showGarageInOut ? rows.reduce((sum, r) => sum + (Number(r.garageKm) || 0), 0) : 0;
   const totalMonthGarageAmount = showGarageInOut ? totalMonthGarageKm * (garageRatePerKm || ratePerKm) : 0;
-  const totalMonthKmAmount = totalMonthKm * ratePerKm;
+  const tieredKmResult = computeTieredKmCharges(totalMonthKm, {
+    enabled: isTieredKmEnabled,
+    baseKmThreshold: tier1KmThreshold,
+    tier1Rate: tier1RatePerKm,
+    tier2Rate: tier2RatePerKm,
+  });
+
+  const totalMonthKmAmount = isTieredKmEnabled
+    ? tieredKmResult.totalKmAmount
+    : (totalMonthKm * ratePerKm);
+
   const totalMonthNight = rows.reduce((sum, r) => sum + (Number(r.nightCharges) || 0), 0);
   const totalMonthParking = rows.reduce((sum, r) => sum + (Number(r.parkingCharges) || 0), 0);
   const totalMonthToll = rows.reduce((sum, r) => sum + (Number(r.tollCharges) || 0), 0);
   const totalMonthBatta = rows.reduce((sum, r) => sum + (Number(r.driverBatta) || 0), 0);
   const totalMonthExtraDutyCharges = rows.reduce((sum, r) => sum + (Number(r.extraDutyCharges) || 0), 0);
-  const grandTotalAmount = rows.reduce((sum, r) => sum + (Number(r.dayTotalAmount) || 0), 0);
+  
+  const calculatedGrandTotal = totalMonthKmAmount + totalMonthOvertimeAmount + totalMonthGarageAmount + totalMonthNight + totalMonthParking + totalMonthToll + totalMonthBatta + totalMonthExtraDutyCharges;
+  const grandTotalAmount = isTieredKmEnabled
+    ? calculatedGrandTotal
+    : rows.reduce((sum, r) => sum + (Number(r.dayTotalAmount) || 0), 0);
   const totalWorkingDays = rows.filter(r => !r.isOffDay && r.totalKm > 0).length;
 
   // Save all rows to AppContext duty slips and backend database in realtime
@@ -1148,6 +1317,13 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               }`}>
                 {calcMode === 'both_km_and_overtime' ? '⚡ Dual Mode: Both KM & OT Active' : '⚙️ Previous Logic: Highest Extra'}
               </span>
+
+              {isTieredKmEnabled && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border bg-cyan-950 text-cyan-300 border-cyan-500 shadow-sm flex items-center gap-1">
+                  <Layers className="w-3 h-3 text-cyan-400" />
+                  <span>Slab KM: 1st {tier1KmThreshold.toLocaleString()} KM @ ₹{tier1RatePerKm}, excess @ ₹{tier2RatePerKm}</span>
+                </span>
+              )}
 
               {/* Real-time DB Auto-Save Live Badge */}
               <span className={`inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-bold border transition-all ${
@@ -1439,6 +1615,20 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               <DollarSign className="w-3.5 h-3.5" />
               <span>Extra Duty (₹): {showExtraDutyCol ? 'ENABLED' : 'OFF'}</span>
             </button>
+
+            {/* Slab / Tiered KM Billing Button */}
+            <button
+              onClick={() => setIsSlabConfigOpen(!isSlabConfigOpen)}
+              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all ${
+                isTieredKmEnabled
+                  ? 'bg-cyan-700 text-white border-cyan-800 shadow-sm'
+                  : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+              }`}
+              title="Configure Tiered / Slab KM Billing (e.g. 2000 KM @ ₹19, excess @ ₹12)"
+            >
+              <Layers className="w-3.5 h-3.5 text-cyan-300" />
+              <span>Slab KM: {isTieredKmEnabled ? `${tier1KmThreshold}k@₹${tier1RatePerKm}, rest@₹${tier2RatePerKm}` : 'OFF'}</span>
+            </button>
           </div>
 
           {/* Quick Recalculation Action Buttons */}
@@ -1461,6 +1651,20 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               <span>🚗 Recalc All KM</span>
             </button>
 
+            {/* 1-Click Slab KM Recalculate Button */}
+            <button
+              onClick={() => applyTieredSlabCalculation(true, tier1KmThreshold, tier1RatePerKm, tier2RatePerKm)}
+              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-colors border ${
+                isTieredKmEnabled
+                  ? 'bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-400 shadow-sm'
+                  : 'bg-cyan-50 hover:bg-cyan-100 text-cyan-900 border-cyan-300'
+              }`}
+              title="1-Click: Dynamically calculate and apply Slab KM rates across all 30/31 days and auto-save"
+            >
+              <Layers className="w-3.5 h-3.5 text-cyan-700" />
+              <span>⚡ Set & Recalc Slab KM</span>
+            </button>
+
             <button
               onClick={handleRecalculateGarage}
               className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 rounded-xl font-bold flex items-center gap-1.5 transition-colors"
@@ -1481,6 +1685,71 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
             )}
           </div>
         </div>
+
+        {/* Dynamic Slab KM Configuration Drawer */}
+        {isSlabConfigOpen && (
+          <div className="bg-slate-900 border border-cyan-600/40 p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs text-white shadow-lg animate-fadeIn">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-black text-cyan-400 uppercase text-[11px] tracking-wider flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-cyan-400" /> Slab KM Pricing Settings:
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 text-[11px] font-bold">1st Slab KM:</span>
+                <input
+                  type="number"
+                  value={tier1KmThreshold}
+                  onChange={e => setTier1KmThreshold(Number(e.target.value))}
+                  className="w-20 px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono font-bold text-center text-xs"
+                  placeholder="2000"
+                />
+                <span className="text-slate-400 text-[10px]">KM</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 text-[11px] font-bold">Slab 1 Rate:</span>
+                <span className="text-slate-400 text-xs">₹</span>
+                <input
+                  type="number"
+                  value={tier1RatePerKm}
+                  onChange={e => setTier1RatePerKm(Number(e.target.value))}
+                  className="w-16 px-1.5 py-1 bg-slate-800 border border-cyan-500/60 rounded-lg text-cyan-300 font-mono font-bold text-center text-xs"
+                  placeholder="19"
+                />
+                <span className="text-slate-400 text-[10px]">/KM</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 text-[11px] font-bold">Excess Rate:</span>
+                <span className="text-slate-400 text-xs">₹</span>
+                <input
+                  type="number"
+                  value={tier2RatePerKm}
+                  onChange={e => setTier2RatePerKm(Number(e.target.value))}
+                  className="w-16 px-1.5 py-1 bg-slate-800 border border-amber-500/60 rounded-lg text-amber-300 font-mono font-bold text-center text-xs"
+                  placeholder="12"
+                />
+                <span className="text-slate-400 text-[10px]">/KM</span>
+              </div>
+              <button
+                onClick={() => applyTieredSlabCalculation(true, tier1KmThreshold, tier1RatePerKm, tier2RatePerKm)}
+                className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white font-black rounded-xl flex items-center gap-1.5 shadow transition-all border border-cyan-400 hover:scale-105"
+                title="Dynamically calculate & apply slab rate across all 30/31 days and auto-save"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-cyan-200" />
+                <span>⚡ Apply Slab to All Rows & Calculate</span>
+              </button>
+              {isTieredKmEnabled && (
+                <button
+                  onClick={() => applyTieredSlabCalculation(false)}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-rose-300 border border-rose-800/60 rounded-xl font-semibold text-xs"
+                >
+                  Turn Off Slab
+                </button>
+              )}
+            </div>
+            <div className="text-[11px] font-mono text-cyan-300 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
+              Formula: (First {tier1KmThreshold} KM × ₹{tier1RatePerKm}) + (Excess KM × ₹{tier2RatePerKm})
+            </div>
+          </div>
+        )}
 
         {/* Auto-Fill Row Helpers */}
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2030,15 +2299,34 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                   <Car className="w-3.5 h-3.5 text-emerald-400" /> Total KM Run
                 </span>
                 <span className="text-[10px] bg-slate-700 px-1.5 py-0.5 rounded font-mono text-emerald-300">
-                  @ ₹{ratePerKm}/KM
+                  {isTieredKmEnabled ? `Slab: ${tier1KmThreshold}k@₹${tier1RatePerKm}` : `@ ₹${ratePerKm}/KM`}
                 </span>
               </div>
               <div className="mt-2 text-2xl font-black font-mono text-white">
                 {totalMonthKm} <span className="text-xs font-normal text-slate-400">KM</span>
               </div>
-              <div className="text-xs text-slate-400 font-mono mt-0.5">
-                {totalMonthKm} KM × ₹{ratePerKm} = <span className="font-bold text-emerald-400">₹{totalMonthKmAmount.toLocaleString('en-IN')}</span>
-              </div>
+              {isTieredKmEnabled ? (
+                <div className="text-[11px] text-slate-300 font-mono mt-0.5 space-y-0.5">
+                  <div className="flex justify-between">
+                    <span className="text-emerald-400">1st {tieredKmResult.tier1Km} KM × ₹{tier1RatePerKm}:</span>
+                    <span className="font-bold">₹{tieredKmResult.tier1Amount.toLocaleString('en-IN')}</span>
+                  </div>
+                  {tieredKmResult.tier2Km > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-amber-400">Excess {tieredKmResult.tier2Km} KM × ₹{tier2RatePerKm}:</span>
+                      <span className="font-bold">₹{tieredKmResult.tier2Amount.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-slate-700 pt-0.5 font-bold text-white">
+                    <span>Total KM Amount:</span>
+                    <span className="text-emerald-400">₹{totalMonthKmAmount.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 font-mono mt-0.5">
+                  {totalMonthKm} KM × ₹{ratePerKm} = <span className="font-bold text-emerald-400">₹{totalMonthKmAmount.toLocaleString('en-IN')}</span>
+                </div>
+              )}
             </div>
             <button
               onClick={handleRecalculateKm}
@@ -2136,7 +2424,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
             <div className="font-mono text-xs text-slate-300 flex flex-wrap items-center gap-1.5">
               {calcMode === 'both_km_and_overtime' ? (
                 <>
-                  <span className="text-emerald-400 font-bold">Total KM: ₹{totalMonthKmAmount.toLocaleString('en-IN')}</span>
+                  <span className="text-emerald-400 font-bold">{isTieredKmEnabled ? `Slab KM (${tieredKmResult.tier1Km}k@₹${tier1RatePerKm}+${tieredKmResult.tier2Km}k@₹${tier2RatePerKm})` : 'Total KM'}: ₹{totalMonthKmAmount.toLocaleString('en-IN')}</span>
                   <span>+</span>
                   <span className="text-amber-400 font-bold">Overtime: ₹{totalMonthOvertimeAmount.toLocaleString('en-IN')}</span>
                   {totalMonthGarageAmount > 0 && (
@@ -2408,6 +2696,112 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                 </button>
               </div>
             </div>
+
+            {/* Dynamic Slab KM Billing Controls in PDF Modal */}
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => applyTieredSlabCalculation(!isTieredKmEnabled, tier1KmThreshold, tier1RatePerKm, tier2RatePerKm)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all border flex items-center gap-1.5 ${
+                    isTieredKmEnabled
+                      ? 'bg-cyan-600 text-white border-cyan-400 shadow-md ring-2 ring-cyan-500/30'
+                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white hover:border-slate-600'
+                  }`}
+                  title="Toggle Tiered Slab KM billing in PDF"
+                >
+                  <Layers className="w-3.5 h-3.5 text-cyan-300" />
+                  <span>Slab KM Billing: {isTieredKmEnabled ? 'ACTIVE' : 'OFF'}</span>
+                </button>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 text-[11px] font-bold">1st Slab KM:</span>
+                  <input
+                    type="number"
+                    value={tier1KmThreshold}
+                    onChange={e => {
+                      const val = Number(e.target.value);
+                      setTier1KmThreshold(val);
+                      if (isTieredKmEnabled) {
+                        applyTieredSlabCalculation(true, val, tier1RatePerKm, tier2RatePerKm);
+                      }
+                    }}
+                    className="w-20 px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono font-bold text-center text-xs"
+                    placeholder="2000"
+                  />
+                  <span className="text-slate-400 text-[10px]">KM</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 text-[11px] font-bold">Slab 1:</span>
+                  <span className="text-slate-400 text-xs">₹</span>
+                  <input
+                    type="number"
+                    value={tier1RatePerKm}
+                    onChange={e => {
+                      const val = Number(e.target.value);
+                      setTier1RatePerKm(val);
+                      if (isTieredKmEnabled) {
+                        applyTieredSlabCalculation(true, tier1KmThreshold, val, tier2RatePerKm);
+                      }
+                    }}
+                    className="w-16 px-1.5 py-1 bg-slate-800 border border-cyan-500/60 rounded-lg text-cyan-300 font-mono font-bold text-center text-xs"
+                    placeholder="19"
+                  />
+                  <span className="text-slate-400 text-[10px]">/KM</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 text-[11px] font-bold">Excess:</span>
+                  <span className="text-slate-400 text-xs">₹</span>
+                  <input
+                    type="number"
+                    value={tier2RatePerKm}
+                    onChange={e => {
+                      const val = Number(e.target.value);
+                      setTier2RatePerKm(val);
+                      if (isTieredKmEnabled) {
+                        applyTieredSlabCalculation(true, tier1KmThreshold, tier1RatePerKm, val);
+                      }
+                    }}
+                    className="w-16 px-1.5 py-1 bg-slate-800 border border-amber-500/60 rounded-lg text-amber-300 font-mono font-bold text-center text-xs"
+                    placeholder="12"
+                  />
+                  <span className="text-slate-400 text-[10px]">/KM</span>
+                </div>
+
+                {/* 1-Click Dynamic Apply & Recalculate Button */}
+                <button
+                  type="button"
+                  onClick={() => applyTieredSlabCalculation(true, tier1KmThreshold, tier1RatePerKm, tier2RatePerKm)}
+                  className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg flex items-center gap-1.5 transition-all shadow border border-cyan-400"
+                  title="Recalculate PDF and all rows with this dynamic slab configuration"
+                >
+                  <Calculator className="w-3.5 h-3.5" />
+                  <span>⚡ Apply Slab & Recalculate PDF</span>
+                </button>
+              </div>
+
+              {/* Real-time Slab Calculation Summary Chip */}
+              <div className="text-[11px] font-mono bg-slate-800/90 px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5 text-slate-300">
+                <span className="text-slate-400">{totalMonthKm} KM Run:</span>
+                <span className="text-cyan-400 font-bold">
+                  {Math.min(totalMonthKm, tier1KmThreshold)} KM × ₹{tier1RatePerKm}
+                </span>
+                {totalMonthKm > tier1KmThreshold && (
+                  <>
+                    <span className="text-slate-500">+</span>
+                    <span className="text-amber-400 font-bold">
+                      {Math.max(0, totalMonthKm - tier1KmThreshold)} KM × ₹{tier2RatePerKm}
+                    </span>
+                  </>
+                )}
+                <span className="text-slate-500">=</span>
+                <span className="text-white font-black bg-cyan-950/90 px-2 py-0.5 rounded border border-cyan-500">
+                  ₹{(isTieredKmEnabled ? totalMonthKmAmount : (totalMonthKm * ratePerKm)).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Render Container for high-quality capture */}
@@ -2466,6 +2860,12 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                 ratePerKm={ratePerKm}
                 overtimeRatePerHour={overtimeRatePerHour}
                 garageRatePerKm={garageRatePerKm}
+                tieredKmConfig={{
+                  enabled: isTieredKmEnabled,
+                  baseKmThreshold: tier1KmThreshold,
+                  tier1Rate: tier1RatePerKm,
+                  tier2Rate: tier2RatePerKm,
+                }}
               />
             )}
           </div>

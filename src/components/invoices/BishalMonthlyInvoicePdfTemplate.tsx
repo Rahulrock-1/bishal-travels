@@ -1,6 +1,7 @@
 import React from 'react';
 import { CompanyProfile, Vehicle, Client, DutySlip, Invoice } from '../../types';
 import { formatDate } from '../../utils/formatters';
+import { computeTieredKmCharges, TieredKmConfig } from '../../utils/calculations';
 
 export interface DailyReportRow {
   date: string;          // e.g. "01-07-2026"
@@ -58,6 +59,7 @@ export interface BishalMonthlyInvoicePdfTemplateProps {
   ratePerKm?: number;
   overtimeRatePerHour?: number;
   garageRatePerKm?: number;
+  tieredKmConfig?: TieredKmConfig; // Dynamic Tiered / Slab KM Billing (e.g. First 2000 KM @ ₹19, Rest @ ₹12)
 }
 
 export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTemplateProps> = ({
@@ -91,6 +93,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
   ratePerKm = vehicle.ratePerKm || 18,
   overtimeRatePerHour = vehicle.ratePerHour || 90,
   garageRatePerKm = vehicle.garageRatePerKm || vehicle.ratePerKm || 18,
+  tieredKmConfig,
 }) => {
   // Filter out Day Off / Garage Maintenance rows so they do not show in the report
   const visibleRows = hideOffDays
@@ -109,14 +112,17 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
       })
     : rows;
 
-  const kmAmount = totalKm * ratePerKm;
+  const tieredKmResult = computeTieredKmCharges(totalKm, tieredKmConfig);
+  const isTieredActive = Boolean(tieredKmConfig?.enabled);
+  const kmAmount = isTieredActive ? tieredKmResult.totalKmAmount : (totalKm * ratePerKm);
   const overtimeAmount = totalOvertimeHours * overtimeRatePerHour;
   const isGarageActive = showGarageInOut || (totalGarageKm !== undefined && totalGarageKm > 0);
   const garageAmount = isGarageActive ? (totalGarageKm * garageRatePerKm) : 0;
   const totalParkingAndToll = totalParking + totalToll;
-  const computedGrandTotal = grandTotalAmount > 0 
-    ? grandTotalAmount 
-    : (kmAmount + overtimeAmount + garageAmount + totalNight + totalParkingAndToll + totalBatta + totalExtraDutyCharges);
+  const fallbackGrandTotal = kmAmount + overtimeAmount + garageAmount + totalNight + totalParkingAndToll + totalBatta + totalExtraDutyCharges;
+  const computedGrandTotal = isTieredActive 
+    ? fallbackGrandTotal 
+    : (grandTotalAmount > 0 ? grandTotalAmount : fallbackGrandTotal);
 
   return (
     <div
@@ -478,23 +484,42 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
           </table>
         </div>
 
-        {/* AT THE END: CALCULATION BREAK-UP BOX (Rendered in New Structure formats OR whenever Garage calculation is active) */}
-        {(pdfFormat !== 'bishal-official' || (isGarageActive && totalGarageKm > 0)) && (
+        {/* AT THE END: CALCULATION BREAK-UP BOX (Rendered in New Structure formats OR whenever Garage calculation or Tiered Slab is active) */}
+        {(pdfFormat !== 'bishal-official' || (isGarageActive && totalGarageKm > 0) || isTieredActive) && (
           <div className="border-t-2 border-black p-3 bg-slate-50/90">
             <div className="text-[11px] font-bold uppercase tracking-wider text-black border-b border-black pb-1 mb-2 flex items-center justify-between">
               <span>BILLING CALCULATION BREAK-UP & FINAL SUMMARY</span>
               <span className="text-[9.5px] font-mono lowercase text-slate-600">
-                mode: {calcMode === 'both_km_and_overtime' ? 'both km & overtime calculated' : 'standard highest extra'}
+                mode: {isTieredActive ? `slab km (${tieredKmConfig?.baseKmThreshold} km @ ₹${tieredKmConfig?.tier1Rate}, excess @ ₹${tieredKmConfig?.tier2Rate})` : (calcMode === 'both_km_and_overtime' ? 'both km & overtime calculated' : 'standard highest extra')}
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-[10.5px] font-medium leading-relaxed">
               {/* Left Column: Distance & Time Charges */}
-              <div className="space-y-1 border-r border-black/30 pr-3">
-                <div className="flex justify-between items-center">
-                  <span>Total KM Run ({totalKm} KM × ₹{ratePerKm}/KM):</span>
-                  <strong className="font-mono text-black">₹ {kmAmount.toLocaleString('en-IN')}</strong>
-                </div>
+              <div className="space-y-1.5 border-r border-black/30 pr-3">
+                {isTieredActive ? (
+                  <div className="space-y-1 bg-emerald-50/80 p-2 rounded border border-emerald-300">
+                    <div className="flex justify-between items-center text-emerald-950 font-bold">
+                      <span>Total KM Run ({totalKm} KM - Tiered Slab Rate):</span>
+                      <strong className="font-mono text-emerald-950 text-xs">₹ {tieredKmResult.totalKmAmount.toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div className="text-[9.5px] text-slate-700 font-mono space-y-0.5 pl-1.5 border-l-2 border-emerald-500">
+                      <div className="flex justify-between">
+                        <span>├─ Slab 1 (First {tieredKmResult.tier1Km} KM × ₹{tieredKmResult.tier1Rate}/KM):</span>
+                        <span className="font-bold">₹ {tieredKmResult.tier1Amount.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>└─ Slab 2 (Excess {tieredKmResult.tier2Km} KM × ₹{tieredKmResult.tier2Rate}/KM):</span>
+                        <span className="font-bold">₹ {tieredKmResult.tier2Amount.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center">
+                    <span>Total KM Run ({totalKm} KM × ₹{ratePerKm}/KM):</span>
+                    <strong className="font-mono text-black">₹ {kmAmount.toLocaleString('en-IN')}</strong>
+                  </div>
+                )}
 
                 <div className="flex justify-between items-center">
                   <span>Total Overtime ({totalOvertimeHours} Hrs × ₹{overtimeRatePerHour}/Hr):</span>
