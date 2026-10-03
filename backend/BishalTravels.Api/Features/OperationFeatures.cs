@@ -13,6 +13,8 @@ public record GetUnbilledDutySlipsQuery(string? ClientId, string? VehicleId) : I
 public record GetDutySlipByIdQuery(string Id) : IQuery<DutySlip?>;
 public record CreateDutySlipCommand(CreateDutySlipDto Dto) : ICommand<DutySlip>;
 public record UpdateDutySlipCommand(string Id, UpdateDutySlipDto Dto) : ICommand<DutySlip?>;
+public record UpsertDutySlipCommand(UpsertDutySlipDto Dto) : ICommand<DutySlip>;
+public record BatchUpsertDutySlipsCommand(IEnumerable<UpsertDutySlipDto> Dtos) : ICommand<IReadOnlyList<DutySlip>>;
 public record DeleteDutySlipCommand(string Id) : ICommand<bool>;
 
 public class DutySlipQueryHandlers :
@@ -42,6 +44,8 @@ public class DutySlipQueryHandlers :
 public class DutySlipCommandHandlers :
     IRequestHandler<CreateDutySlipCommand, DutySlip>,
     IRequestHandler<UpdateDutySlipCommand, DutySlip?>,
+    IRequestHandler<UpsertDutySlipCommand, DutySlip>,
+    IRequestHandler<BatchUpsertDutySlipsCommand, IReadOnlyList<DutySlip>>,
     IRequestHandler<DeleteDutySlipCommand, bool>
 {
     private readonly IDutySlipService _service;
@@ -55,6 +59,16 @@ public class DutySlipCommandHandlers :
     public async Task<DutySlip?> HandleAsync(UpdateDutySlipCommand request, CancellationToken cancellationToken = default)
     {
         return await _service.UpdateDutySlipAsync(request.Id, request.Dto);
+    }
+
+    public async Task<DutySlip> HandleAsync(UpsertDutySlipCommand request, CancellationToken cancellationToken = default)
+    {
+        return await _service.UpsertDutySlipAsync(request.Dto);
+    }
+
+    public async Task<IReadOnlyList<DutySlip>> HandleAsync(BatchUpsertDutySlipsCommand request, CancellationToken cancellationToken = default)
+    {
+        return await _service.BatchUpsertDutySlipsAsync(request.Dtos);
     }
 
     public async Task<bool> HandleAsync(DeleteDutySlipCommand request, CancellationToken cancellationToken = default)

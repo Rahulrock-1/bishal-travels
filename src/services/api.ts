@@ -105,6 +105,16 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(dutySlip)
       }),
+    upsert: (dutySlip: Partial<DutySlip> & { dutySlipNo: string; date: string; vehicleId: string; clientId: string }) => 
+      fetchJson<DutySlip>('/dutyslips/upsert', {
+        method: 'POST',
+        body: JSON.stringify(dutySlip)
+      }),
+    batchUpsert: (dutySlips: (Partial<DutySlip> & { dutySlipNo: string; date: string; vehicleId: string; clientId: string })[]) => 
+      fetchJson<DutySlip[]>('/dutyslips/batch-upsert', {
+        method: 'POST',
+        body: JSON.stringify(dutySlips)
+      }),
     update: (id: string, dutySlip: Partial<DutySlip>) => 
       fetchJson<DutySlip>(`/dutyslips/${id}`, {
         method: 'PUT',

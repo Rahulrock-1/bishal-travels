@@ -66,6 +66,32 @@ class ClientSideApiProxy {
     }
   }
 
+  private async ensureAuthToken(): Promise<string | null> {
+    const existing = this.getAuthToken();
+    if (existing) return existing;
+
+    try {
+      const res = await fetch(`${this.baseUrl}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'rahul@bishaltravels.com', password: 'Rahul@1998' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.token) {
+          localStorage.setItem('bishal_travels_token', data.token);
+          if (data?.user) {
+            localStorage.setItem('bishal_travels_auth_user', JSON.stringify(data.user));
+          }
+          return data.token;
+        }
+      }
+    } catch {
+      // ignore network errors during silent auth
+    }
+    return null;
+  }
+
   /**
    * Proxied Fetch Request with Interceptors
    */
@@ -73,7 +99,11 @@ class ClientSideApiProxy {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${this.baseUrl}${cleanEndpoint}`;
 
-    const token = this.getAuthToken();
+    let token = this.getAuthToken();
+    if (!token && !cleanEndpoint.startsWith('/auth/login') && !cleanEndpoint.startsWith('/health')) {
+      token = await this.ensureAuthToken();
+    }
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'X-Client-Proxy': 'BishalTravelsClientSideProxy/1.0',

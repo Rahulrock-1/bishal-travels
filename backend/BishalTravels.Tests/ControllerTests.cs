@@ -323,4 +323,65 @@ public class ControllerTests
         var parts = token.Split('.');
         Assert.Equal(3, parts.Length);
     }
+
+    [Fact]
+    public async Task DutySlipsController_Upsert_CreatesAndThenUpdatesRealtime()
+    {
+        var (context, mediator) = CreateTestDependencies(nameof(DutySlipsController_Upsert_CreatesAndThenUpdatesRealtime));
+        await DbInitializer.InitializeAsync(context);
+
+        var controller = new DutySlipsController(mediator);
+        var upsertDto = new UpsertDutySlipDto(
+            Id: null,
+            DutySlipNo: "DS-TEST-REALTIME-01",
+            Date: "2026-10-03",
+            VehicleId: "veh-001",
+            ClientId: "cli-001",
+            Route: "Kolkata to Airport",
+            DriverName: "Bishal Driver",
+            StartKm: 10000,
+            EndKm: 10150,
+            GarageOutKm: 10,
+            GarageInKm: 10,
+            GarageKm: 20,
+            StartTime: "08:00",
+            EndTime: "18:00",
+            ExtraDuty: "Regular Duty",
+            ExtraDutyCharges: 0,
+            NightCharges: 0,
+            ParkingCharges: 100,
+            TollCharges: 250,
+            DriverBatta: 300,
+            FuelCharges: 0,
+            OtherExpenses: 0,
+            Notes: "Realtime test log",
+            Status: "Pending"
+        );
+
+        // 1. Initial creation via upsert
+        var createResult = await controller.UpsertDutySlip(upsertDto);
+        var okCreate = Assert.IsType<OkObjectResult>(createResult.Result);
+        var createdSlip = Assert.IsType<DutySlip>(okCreate.Value);
+
+        Assert.Equal("DS-TEST-REALTIME-01", createdSlip.DutySlipNo);
+        Assert.Equal(150m, createdSlip.TotalKm);
+        Assert.Equal(100m, createdSlip.ParkingCharges);
+
+        // 2. Realtime update via upsert with same vehicle and date
+        var updateDto = upsertDto with {
+            Id = createdSlip.Id,
+            EndKm = 10200,
+            ParkingCharges = 200,
+            Notes = "Updated realtime in database"
+        };
+
+        var updateResult = await controller.UpsertDutySlip(updateDto);
+        var okUpdate = Assert.IsType<OkObjectResult>(updateResult.Result);
+        var updatedSlip = Assert.IsType<DutySlip>(okUpdate.Value);
+
+        Assert.Equal(createdSlip.Id, updatedSlip.Id);
+        Assert.Equal(200m, updatedSlip.TotalKm);
+        Assert.Equal(200m, updatedSlip.ParkingCharges);
+        Assert.Equal("Updated realtime in database", updatedSlip.Notes);
+    }
 }

@@ -151,6 +151,35 @@ public record UpdateDutySlipDto(
     string? Status
 );
 
+public record UpsertDutySlipDto(
+    string? Id,
+    string DutySlipNo,
+    string Date,
+    string VehicleId,
+    string ClientId,
+    string Route,
+    string DriverName,
+    decimal StartKm,
+    decimal EndKm,
+    decimal? GarageOutKm,
+    decimal? GarageInKm,
+    decimal? GarageKm,
+    string StartTime,
+    string EndTime,
+    string? ExtraDuty,
+    decimal? ExtraDutyCharges,
+    decimal NightCharges,
+    decimal ParkingCharges,
+    decimal TollCharges,
+    decimal DriverBatta,
+    decimal FuelCharges,
+    decimal OtherExpenses,
+    string? Notes,
+    string? Status
+);
+
+public record BatchUpsertDutySlipsDto(List<UpsertDutySlipDto> Slips);
+
 // --- Invoice DTOs ---
 public record InvoiceItemDto(
     string Id,

@@ -70,6 +70,7 @@ public interface IDutySlipRepository : IRepository<DutySlip>
     Task<DutySlip?> GetWithRelationsAsync(string id);
     Task<DutySlip?> GetByDutySlipNoAsync(string dutySlipNo);
     Task<bool> DutySlipNoExistsAsync(string dutySlipNo, string? excludeId = null);
+    Task<DutySlip?> GetByVehicleAndDateAsync(string vehicleId, string date);
 }
 
 public class DutySlipRepository : Repository<DutySlip>, IDutySlipRepository
@@ -127,6 +128,14 @@ public class DutySlipRepository : Repository<DutySlip>, IDutySlipRepository
     {
         var clean = dutySlipNo.Trim().ToUpper();
         return await _dbSet.AnyAsync(d => d.DutySlipNo == clean && (excludeId == null || d.Id != excludeId));
+    }
+
+    public async Task<DutySlip?> GetByVehicleAndDateAsync(string vehicleId, string date)
+    {
+        return await _dbSet
+            .Include(d => d.Vehicle)
+            .Include(d => d.Client)
+            .FirstOrDefaultAsync(d => d.VehicleId == vehicleId && d.Date == date);
     }
 }
 

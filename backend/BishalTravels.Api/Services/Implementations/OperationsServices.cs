@@ -177,6 +177,154 @@ public class DutySlipService : IDutySlipService
         return await _unitOfWork.DutySlips.GetWithRelationsAsync(id);
     }
 
+    public async Task<DutySlip> UpsertDutySlipAsync(UpsertDutySlipDto dto)
+    {
+        var cleanSlipNo = dto.DutySlipNo.Trim().ToUpper();
+
+        // 1. Check existing by ID, (VehicleId, Date), or SlipNo
+        DutySlip? existing = null;
+        if (!string.IsNullOrWhiteSpace(dto.Id))
+        {
+            existing = await _unitOfWork.DutySlips.GetByIdAsync(dto.Id);
+        }
+
+        if (existing == null && !string.IsNullOrWhiteSpace(dto.VehicleId) && !string.IsNullOrWhiteSpace(dto.Date))
+        {
+            existing = await _unitOfWork.DutySlips.GetByVehicleAndDateAsync(dto.VehicleId, dto.Date);
+        }
+
+        if (existing == null && !string.IsNullOrWhiteSpace(cleanSlipNo))
+        {
+            existing = await _unitOfWork.DutySlips.GetByDutySlipNoAsync(cleanSlipNo);
+        }
+
+        var vehicle = await _unitOfWork.Vehicles.GetByIdAsync(dto.VehicleId);
+        var standardHours = vehicle?.DefaultDailyHours ?? 10.0m;
+
+        var (totalKm, totalHours, extraHours) = _calcService.CalculateTripMetrics(
+            dto.StartKm,
+            dto.EndKm,
+            dto.StartTime,
+            dto.EndTime,
+            standardHours
+        );
+
+        if (existing != null)
+        {
+            // Do not alter billed duty slips
+            if (existing.Status == "Billed" && !string.IsNullOrEmpty(existing.InvoiceId))
+            {
+                return (await _unitOfWork.DutySlips.GetWithRelationsAsync(existing.Id)) ?? existing;
+            }
+
+            existing.DutySlipNo = cleanSlipNo;
+            existing.Date = dto.Date;
+            existing.VehicleId = dto.VehicleId;
+            existing.ClientId = dto.ClientId;
+            existing.Route = (dto.Route ?? "Local Duty").Trim();
+            existing.DriverName = (dto.DriverName ?? vehicle?.DriverName ?? "Driver").Trim();
+            existing.StartKm = dto.StartKm;
+            existing.EndKm = dto.EndKm;
+            existing.TotalKm = totalKm;
+            existing.GarageOutKm = dto.GarageOutKm;
+            existing.GarageInKm = dto.GarageInKm;
+            existing.GarageKm = dto.GarageKm;
+            existing.StartTime = dto.StartTime;
+            existing.EndTime = dto.EndTime;
+            existing.TotalHours = totalHours;
+            existing.ExtraHours = extraHours;
+            existing.ExtraDuty = dto.ExtraDuty;
+            existing.ExtraDutyCharges = dto.ExtraDutyCharges;
+            existing.NightCharges = dto.NightCharges;
+            existing.ParkingCharges = dto.ParkingCharges;
+            existing.TollCharges = dto.TollCharges;
+            existing.DriverBatta = dto.DriverBatta;
+            existing.FuelCharges = dto.FuelCharges;
+            existing.OtherExpenses = dto.OtherExpenses;
+            existing.Notes = dto.Notes;
+            if (!string.IsNullOrWhiteSpace(dto.Status)) existing.Status = dto.Status;
+            existing.UpdatedAt = DateTime.UtcNow;
+
+            await _unitOfWork.DutySlips.UpdateAsync(existing);
+            await _unitOfWork.CommitAsync();
+
+            await _messageBus.PublishAsync("dutyslips.updated", new DutySlipCreatedEvent(
+                existing.Id,
+                existing.DutySlipNo,
+                existing.VehicleId,
+                existing.ClientId,
+                existing.TotalKm,
+                DateTime.UtcNow
+            ));
+
+            return (await _unitOfWork.DutySlips.GetWithRelationsAsync(existing.Id)) ?? existing;
+        }
+        else
+        {
+            var targetId = !string.IsNullOrWhiteSpace(dto.Id) && !dto.Id.StartsWith("ds-temp")
+                ? dto.Id
+                : $"ds-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}-{Guid.NewGuid().ToString("N")[..4]}";
+
+            var newSlip = new DutySlip
+            {
+                Id = targetId,
+                DutySlipNo = cleanSlipNo,
+                Date = dto.Date,
+                VehicleId = dto.VehicleId,
+                ClientId = dto.ClientId,
+                Route = (dto.Route ?? "Local Duty").Trim(),
+                DriverName = (dto.DriverName ?? vehicle?.DriverName ?? "Driver").Trim(),
+                StartKm = dto.StartKm,
+                EndKm = dto.EndKm,
+                TotalKm = totalKm,
+                GarageOutKm = dto.GarageOutKm,
+                GarageInKm = dto.GarageInKm,
+                GarageKm = dto.GarageKm,
+                StartTime = dto.StartTime,
+                EndTime = dto.EndTime,
+                TotalHours = totalHours,
+                ExtraHours = extraHours,
+                ExtraDuty = dto.ExtraDuty,
+                ExtraDutyCharges = dto.ExtraDutyCharges,
+                NightCharges = dto.NightCharges,
+                ParkingCharges = dto.ParkingCharges,
+                TollCharges = dto.TollCharges,
+                DriverBatta = dto.DriverBatta,
+                FuelCharges = dto.FuelCharges,
+                OtherExpenses = dto.OtherExpenses,
+                Notes = dto.Notes,
+                Status = dto.Status ?? "Pending",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            await _unitOfWork.DutySlips.AddAsync(newSlip);
+            await _unitOfWork.CommitAsync();
+
+            await _messageBus.PublishAsync("dutyslips.created", new DutySlipCreatedEvent(
+                newSlip.Id,
+                newSlip.DutySlipNo,
+                newSlip.VehicleId,
+                newSlip.ClientId,
+                newSlip.TotalKm,
+                DateTime.UtcNow
+            ));
+
+            return (await _unitOfWork.DutySlips.GetWithRelationsAsync(newSlip.Id)) ?? newSlip;
+        }
+    }
+
+    public async Task<IReadOnlyList<DutySlip>> BatchUpsertDutySlipsAsync(IEnumerable<UpsertDutySlipDto> dtoList)
+    {
+        var results = new List<DutySlip>();
+        foreach (var dto in dtoList)
+        {
+            var saved = await UpsertDutySlipAsync(dto);
+            results.Add(saved);
+        }
+        return results;
+    }
+
     public async Task<bool> DeleteDutySlipAsync(string id)
     {
         var dutySlip = await _unitOfWork.DutySlips.GetByIdAsync(id);

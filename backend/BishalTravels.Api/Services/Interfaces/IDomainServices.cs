@@ -34,6 +34,8 @@ public interface IDutySlipService
     Task<DutySlip?> GetDutySlipByIdAsync(string id);
     Task<DutySlip> CreateDutySlipAsync(CreateDutySlipDto dto);
     Task<DutySlip?> UpdateDutySlipAsync(string id, UpdateDutySlipDto dto);
+    Task<DutySlip> UpsertDutySlipAsync(UpsertDutySlipDto dto);
+    Task<IReadOnlyList<DutySlip>> BatchUpsertDutySlipsAsync(IEnumerable<UpsertDutySlipDto> dtoList);
     Task<bool> DeleteDutySlipAsync(string id);
 }
 

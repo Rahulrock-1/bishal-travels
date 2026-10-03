@@ -61,6 +61,32 @@ public class DutySlipsController : ControllerBase
         return CreatedAtAction(nameof(GetDutySlip), new { id = created.Id }, created);
     }
 
+    [HttpPost("upsert")]
+    [AllowAnonymous]
+    public async Task<ActionResult<DutySlip>> UpsertDutySlip([FromBody] UpsertDutySlipDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.DutySlipNo) || string.IsNullOrWhiteSpace(dto.Date))
+        {
+            return BadRequest(new { message = "Duty Slip No and Date are required." });
+        }
+
+        var saved = await _mediator.Send(new UpsertDutySlipCommand(dto));
+        return Ok(saved);
+    }
+
+    [HttpPost("batch-upsert")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IEnumerable<DutySlip>>> BatchUpsertDutySlips([FromBody] List<UpsertDutySlipDto> dtos)
+    {
+        if (dtos == null || dtos.Count == 0)
+        {
+            return BadRequest(new { message = "No duty slips provided for batch upsert." });
+        }
+
+        var results = await _mediator.Send(new BatchUpsertDutySlipsCommand(dtos));
+        return Ok(results);
+    }
+
     [HttpPut("{id}")]
     public async Task<ActionResult<DutySlip>> UpdateDutySlip(string id, [FromBody] UpdateDutySlipDto dto)
     {

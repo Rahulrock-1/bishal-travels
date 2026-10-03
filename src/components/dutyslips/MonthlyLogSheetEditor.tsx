@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Calendar, 
   Car, 
@@ -20,7 +20,9 @@ import {
   Printer,
   X,
   DollarSign,
-  Filter
+  Filter,
+  Database,
+  CheckCircle2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DutySlip } from '../../types';
@@ -72,6 +74,9 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     dutySlips, 
     addDutySlip, 
     updateDutySlip, 
+    upsertDutySlip,
+    batchUpsertDutySlips,
+    isCloudConnected,
     setActiveTab, 
     createInvoice, 
     setSelectedInvoiceForView 
@@ -81,6 +86,12 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth()); // 0-indexed
   
+  // Real-time DB Auto-Save State
+  const [isAutoSaving, setIsAutoSaving] = useState<boolean>(false);
+  const [lastAutoSavedAt, setLastAutoSavedAt] = useState<string | null>(null);
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingRowsRef = useRef<DailyRowData[] | null>(null);
+
   // Vehicle Active/Inactive filter (Default: 'Active' so only active vehicles are listed by default)
   const [vehicleStatusFilter, setVehicleStatusFilter] = useState<'Active' | 'All' | 'Inactive'>('Active');
   
@@ -127,6 +138,88 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const [showGarageColsInPdf, setShowGarageColsInPdf] = useState<boolean>(false);
 
   const [rows, setRows] = useState<DailyRowData[]>([]);
+
+  // Build backend payload for a single daily row
+  const buildSlipPayload = useCallback((r: DailyRowData) => {
+    const existing = dutySlips.find(
+      ds => ds.vehicleId === selectedVehicleId && ds.date === r.dateStr
+    );
+    return {
+      id: existing?.id,
+      dutySlipNo: r.dutySlipNo,
+      date: r.dateStr,
+      vehicleId: selectedVehicleId,
+      clientId: selectedClientId,
+      route: r.route,
+      extraDuty: r.extraDuty,
+      extraDutyCharges: Number(r.extraDutyCharges) || 0,
+      driverName: driverName,
+      startKm: Number(r.startKm) || 0,
+      endKm: Number(r.endKm) || 0,
+      totalKm: Number(r.totalKm) || 0,
+      garageOutKm: Number(r.garageOutKm) || 0,
+      garageInKm: Number(r.garageInKm) || 0,
+      garageKm: Number(r.garageKm) || 0,
+      startTime: r.startTime || '',
+      endTime: r.endTime || '',
+      totalHours: Number(r.totalHours) || 0,
+      extraHours: Number(r.extraHours) || 0,
+      nightCharges: Number(r.nightCharges) || 0,
+      parkingCharges: Number(r.parkingCharges) || 0,
+      tollCharges: Number(r.tollCharges) || 0,
+      driverBatta: Number(r.driverBatta) || 0,
+      fuelCharges: 0,
+      otherExpenses: Number(r.overtimeCharges) || 0,
+      notes: r.notes || '',
+      status: existing?.status || 'Pending'
+    };
+  }, [dutySlips, selectedVehicleId, selectedClientId, driverName]);
+
+  // Flush pending auto-save immediately to database
+  const flushAutoSave = useCallback(async (rowsToSave?: DailyRowData[]) => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+
+    const targetRows = rowsToSave || pendingRowsRef.current || rows;
+    if (!targetRows || targetRows.length === 0 || !selectedVehicleId || !selectedClientId) {
+      return;
+    }
+
+    setIsAutoSaving(true);
+    try {
+      const payloads = targetRows.map(r => buildSlipPayload(r));
+      await batchUpsertDutySlips(payloads);
+      const nowStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLastAutoSavedAt(nowStr);
+    } catch (err) {
+      console.warn('[MonthlyLogSheetEditor] Auto-save error, queued for sync:', err);
+    } finally {
+      setIsAutoSaving(false);
+      pendingRowsRef.current = null;
+    }
+  }, [rows, selectedVehicleId, selectedClientId, buildSlipPayload, batchUpsertDutySlips]);
+
+  // Debounced trigger for real-time auto-saving during rapid edits (600ms)
+  const triggerRealtimeAutoSave = useCallback((updatedRows: DailyRowData[]) => {
+    pendingRowsRef.current = updatedRows;
+    setIsAutoSaving(true);
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    autoSaveTimerRef.current = setTimeout(() => {
+      flushAutoSave(updatedRows);
+    }, 600);
+  }, [flushAutoSave]);
+
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, []);
 
   // When vehicle filter changes, adjust selectedVehicleId if needed
   useEffect(() => {
@@ -480,6 +573,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       );
 
       copy[index] = row;
+      triggerRealtimeAutoSave(copy);
       return copy;
     });
   };
@@ -488,30 +582,34 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const handleToggleCalcMode = (mode?: 'both_km_and_overtime' | 'highest_extra') => {
     const newMode = mode || (calcMode === 'both_km_and_overtime' ? 'highest_extra' : 'both_km_and_overtime');
     setCalcMode(newMode);
-    setRows(prev => prev.map(row => {
-      if (row.isOffDay) return row;
-      const total = computeRowTotal(
-        row.totalKm,
-        row.totalHours,
-        row.extraHours,
-        row.nightCharges,
-        row.parkingCharges,
-        row.tollCharges,
-        row.driverBatta,
-        ratePerKm,
-        overtimeRatePerHour,
-        defaultDutyHours,
-        defaultBaseKm,
-        row.garageKm || 0,
-        garageRatePerKm,
-        row.extraDutyCharges || 0,
-        newMode
-      );
-      return {
-        ...row,
-        dayTotalAmount: total,
-      };
-    }));
+    setRows(prev => {
+      const updated = prev.map(row => {
+        if (row.isOffDay) return row;
+        const total = computeRowTotal(
+          row.totalKm,
+          row.totalHours,
+          row.extraHours,
+          row.nightCharges,
+          row.parkingCharges,
+          row.tollCharges,
+          row.driverBatta,
+          ratePerKm,
+          overtimeRatePerHour,
+          defaultDutyHours,
+          defaultBaseKm,
+          row.garageKm || 0,
+          garageRatePerKm,
+          row.extraDutyCharges || 0,
+          newMode
+        );
+        return {
+          ...row,
+          dayTotalAmount: total,
+        };
+      });
+      triggerRealtimeAutoSave(updated);
+      return updated;
+    });
     setSaveSuccessMsg(
       newMode === 'both_km_and_overtime'
         ? '⚡ Activated Dual Mode: Both KM & Overtime calculated together!'
@@ -522,100 +620,112 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
   // One-click recalculation of all Overtime charges
   const handleRecalculateOvertime = () => {
-    setRows(prev => prev.map(row => {
-      if (row.isOffDay) return row;
-      const otHrs = Math.max(0, (row.totalHours || 0) - defaultDutyHours);
-      const otCost = otHrs * overtimeRatePerHour;
-      const total = computeRowTotal(
-        row.totalKm,
-        row.totalHours,
-        otHrs,
-        row.nightCharges,
-        row.parkingCharges,
-        row.tollCharges,
-        row.driverBatta,
-        ratePerKm,
-        overtimeRatePerHour,
-        defaultDutyHours,
-        defaultBaseKm,
-        row.garageKm || 0,
-        garageRatePerKm,
-        row.extraDutyCharges || 0,
-        calcMode
-      );
-      return {
-        ...row,
-        extraHours: otHrs,
-        overtimeCharges: otCost,
-        dayTotalAmount: total,
-      };
-    }));
+    setRows(prev => {
+      const updated = prev.map(row => {
+        if (row.isOffDay) return row;
+        const otHrs = Math.max(0, (row.totalHours || 0) - defaultDutyHours);
+        const otCost = otHrs * overtimeRatePerHour;
+        const total = computeRowTotal(
+          row.totalKm,
+          row.totalHours,
+          otHrs,
+          row.nightCharges,
+          row.parkingCharges,
+          row.tollCharges,
+          row.driverBatta,
+          ratePerKm,
+          overtimeRatePerHour,
+          defaultDutyHours,
+          defaultBaseKm,
+          row.garageKm || 0,
+          garageRatePerKm,
+          row.extraDutyCharges || 0,
+          calcMode
+        );
+        return {
+          ...row,
+          extraHours: otHrs,
+          overtimeCharges: otCost,
+          dayTotalAmount: total,
+        };
+      });
+      triggerRealtimeAutoSave(updated);
+      return updated;
+    });
     setSaveSuccessMsg(`⏱️ Recalculated Overtime (@ ₹${overtimeRatePerHour}/hr) for all active days!`);
     setTimeout(() => setSaveSuccessMsg(null), 3000);
   };
 
   // One-click recalculation of all KM charges
   const handleRecalculateKm = () => {
-    setRows(prev => prev.map(row => {
-      if (row.isOffDay) return row;
-      const run = Math.max(0, (row.endKm || 0) - (row.startKm || 0)) || row.totalKm;
-      const gKm = computeGarageKm(row.garageOutKm, row.garageInKm, row.startKm, row.endKm);
-      const total = computeRowTotal(
-        run,
-        row.totalHours,
-        row.extraHours,
-        row.nightCharges,
-        row.parkingCharges,
-        row.tollCharges,
-        row.driverBatta,
-        ratePerKm,
-        overtimeRatePerHour,
-        defaultDutyHours,
-        defaultBaseKm,
-        gKm,
-        garageRatePerKm,
-        row.extraDutyCharges || 0,
-        calcMode
-      );
-      return {
-        ...row,
-        totalKm: run,
-        garageKm: gKm,
-        dayTotalAmount: total,
-      };
-    }));
+    setRows(prev => {
+      const updated = prev.map(row => {
+        if (row.isOffDay) return row;
+        const run = Math.max(0, (row.endKm || 0) - (row.startKm || 0)) || row.totalKm;
+        const gKm = computeGarageKm(row.garageOutKm, row.garageInKm, row.startKm, row.endKm);
+        const total = computeRowTotal(
+          run,
+          row.totalHours,
+          row.extraHours,
+          row.nightCharges,
+          row.parkingCharges,
+          row.tollCharges,
+          row.driverBatta,
+          ratePerKm,
+          overtimeRatePerHour,
+          defaultDutyHours,
+          defaultBaseKm,
+          gKm,
+          garageRatePerKm,
+          row.extraDutyCharges || 0,
+          calcMode
+        );
+        return {
+          ...row,
+          totalKm: run,
+          garageKm: gKm,
+          dayTotalAmount: total,
+        };
+      });
+      triggerRealtimeAutoSave(updated);
+      return updated;
+    });
     setSaveSuccessMsg(`🚗 Recalculated KM run (@ ₹${ratePerKm}/KM) for all active days!`);
     setTimeout(() => setSaveSuccessMsg(null), 3000);
   };
 
   // One-click recalculation of all Garage KM charges
   const handleRecalculateGarage = () => {
-    setRows(prev => prev.map(row => {
-      if (row.isOffDay) return row;
-      const gKm = computeGarageKm(row.garageOutKm, row.garageInKm, row.startKm, row.endKm);
-      const total = computeRowTotal(
-        row.totalKm,
-        row.totalHours,
-        row.extraHours,
-        row.nightCharges,
-        row.parkingCharges,
-        row.tollCharges,
-        row.driverBatta,
-        ratePerKm,
-        overtimeRatePerHour,
-        defaultDutyHours,
-        defaultBaseKm,
-        gKm,
-        garageRatePerKm,
-        row.extraDutyCharges || 0,
-        calcMode
-      );
-      return {
-        ...row,
-        garageKm: gKm,
-        dayTotalAmount: total,
-      };
-    }));
+    setRows(prev => {
+      const updated = prev.map(row => {
+        if (row.isOffDay) return row;
+        const gKm = computeGarageKm(row.garageOutKm, row.garageInKm, row.startKm, row.endKm);
+        const total = computeRowTotal(
+          row.totalKm,
+          row.totalHours,
+          row.extraHours,
+          row.nightCharges,
+          row.parkingCharges,
+          row.tollCharges,
+          row.driverBatta,
+          ratePerKm,
+          overtimeRatePerHour,
+          defaultDutyHours,
+          defaultBaseKm,
+          gKm,
+          garageRatePerKm,
+          row.extraDutyCharges || 0,
+          calcMode
+        );
+        return {
+          ...row,
+          garageKm: gKm,
+          dayTotalAmount: total,
+        };
+      });
+      triggerRealtimeAutoSave(updated);
+      return updated;
+    });
     setSaveSuccessMsg(`🚗 Recalculated Garage distance (@ ₹${garageRatePerKm}/KM) for all active days!`);
     setTimeout(() => setSaveSuccessMsg(null), 3000);
   };
@@ -670,36 +780,40 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const handleApplyGarageKmToAllRows = (customKm?: number) => {
     const targetKm = customKm !== undefined ? customKm : defaultGarageKm;
     const half = Math.round((targetKm / 2) * 10) / 10;
-    setRows(prev => prev.map(row => {
-      if (row.isOffDay) return row;
-      const gOut = half;
-      const gIn = half;
-      const gKm = targetKm;
-      const total = computeRowTotal(
-        row.totalKm,
-        row.totalHours,
-        row.extraHours,
-        Number(row.nightCharges) || 0,
-        Number(row.parkingCharges) || 0,
-        Number(row.tollCharges) || 0,
-        Number(row.driverBatta) || 0,
-        ratePerKm,
-        overtimeRatePerHour,
-        defaultDutyHours,
-        defaultBaseKm,
-        gKm,
-        garageRatePerKm,
-        row.extraDutyCharges || 0,
-        calcMode
-      );
-      return {
-        ...row,
-        garageOutKm: gOut,
-        garageInKm: gIn,
-        garageKm: gKm,
-        dayTotalAmount: total,
-      };
-    }));
+    setRows(prev => {
+      const updated = prev.map(row => {
+        if (row.isOffDay) return row;
+        const gOut = half;
+        const gIn = half;
+        const gKm = targetKm;
+        const total = computeRowTotal(
+          row.totalKm,
+          row.totalHours,
+          row.extraHours,
+          Number(row.nightCharges) || 0,
+          Number(row.parkingCharges) || 0,
+          Number(row.tollCharges) || 0,
+          Number(row.driverBatta) || 0,
+          ratePerKm,
+          overtimeRatePerHour,
+          defaultDutyHours,
+          defaultBaseKm,
+          gKm,
+          garageRatePerKm,
+          row.extraDutyCharges || 0,
+          calcMode
+        );
+        return {
+          ...row,
+          garageOutKm: gOut,
+          garageInKm: gIn,
+          garageKm: gKm,
+          dayTotalAmount: total,
+        };
+      });
+      triggerRealtimeAutoSave(updated);
+      return updated;
+    });
     setShowGarageInOut(true);
     setSaveSuccessMsg(`🚗 Applied ${targetKm} KM Garage Run (${half} Out + ${half} In @ ₹${garageRatePerKm}/KM) to all duty days!`);
     setTimeout(() => setSaveSuccessMsg(null), 3500);
@@ -711,7 +825,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       let currentKm = initialStartKm;
       const targetKm = defaultBaseKm || 100;
       const targetHours = defaultDutyHours || 10;
-      return prev.map(row => {
+      const updated = prev.map(row => {
         if (row.isOffDay) {
           return {
             ...row,
@@ -766,6 +880,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           dayTotalAmount: total
         };
       });
+      triggerRealtimeAutoSave(updated);
+      return updated;
     });
   };
 
@@ -777,7 +893,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       const targetHours = defaultDutyHours || 10;
       const half = Math.round((defaultGarageKm / 2) * 10) / 10;
 
-      return prev.map(row => {
+      const updated = prev.map(row => {
         const isOff = !includeSundays && row.isSunday;
         const start = currentKm;
         const run = isOff ? 0 : targetKm;
@@ -829,6 +945,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           dayTotalAmount: total
         };
       });
+      triggerRealtimeAutoSave(updated);
+      return updated;
     });
   };
 
@@ -838,57 +956,61 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     const targetHours = defaultDutyHours || 10;
     let currentKm = initialStartKm;
 
-    setRows(prev => prev.map(row => {
-      if (row.isOffDay) {
+    setRows(prev => {
+      const updated = prev.map(row => {
+        if (row.isOffDay) {
+          return {
+            ...row,
+            startKm: currentKm,
+            endKm: currentKm,
+            totalKm: 0,
+            totalHours: 0,
+            extraHours: 0,
+            overtimeCharges: 0,
+            dayTotalAmount: 0
+          };
+        }
+
+        const start = currentKm;
+        const end = start + targetKm;
+        currentKm = end;
+
+        const extraHrs = Math.max(0, targetHours - defaultDutyHours);
+        const otCost = extraHrs * overtimeRatePerHour;
+        const gKm = row.garageKm || computeGarageKm(row.garageOutKm, row.garageInKm, start, end);
+        const total = computeRowTotal(
+          targetKm,
+          targetHours,
+          extraHrs,
+          Number(row.nightCharges) || 0,
+          Number(row.parkingCharges) || 0,
+          Number(row.tollCharges) || 0,
+          Number(row.driverBatta) || 0,
+          ratePerKm,
+          overtimeRatePerHour,
+          defaultDutyHours,
+          defaultBaseKm,
+          gKm,
+          garageRatePerKm,
+          row.extraDutyCharges || 0,
+          calcMode
+        );
+
         return {
           ...row,
-          startKm: currentKm,
-          endKm: currentKm,
-          totalKm: 0,
-          totalHours: 0,
-          extraHours: 0,
-          overtimeCharges: 0,
-          dayTotalAmount: 0
+          startKm: start,
+          endKm: end,
+          totalKm: targetKm,
+          totalHours: targetHours,
+          extraHours: extraHrs,
+          overtimeCharges: otCost,
+          garageKm: gKm,
+          dayTotalAmount: total
         };
-      }
-
-      const start = currentKm;
-      const end = start + targetKm;
-      currentKm = end;
-
-      const extraHrs = Math.max(0, targetHours - defaultDutyHours);
-      const otCost = extraHrs * overtimeRatePerHour;
-      const gKm = row.garageKm || computeGarageKm(row.garageOutKm, row.garageInKm, start, end);
-      const total = computeRowTotal(
-        targetKm,
-        targetHours,
-        extraHrs,
-        Number(row.nightCharges) || 0,
-        Number(row.parkingCharges) || 0,
-        Number(row.tollCharges) || 0,
-        Number(row.driverBatta) || 0,
-        ratePerKm,
-        overtimeRatePerHour,
-        defaultDutyHours,
-        defaultBaseKm,
-        gKm,
-        garageRatePerKm,
-        row.extraDutyCharges || 0,
-        calcMode
-      );
-
-      return {
-        ...row,
-        startKm: start,
-        endKm: end,
-        totalKm: targetKm,
-        totalHours: targetHours,
-        extraHours: extraHrs,
-        overtimeCharges: otCost,
-        garageKm: gKm,
-        dayTotalAmount: total
-      };
-    }));
+      });
+      triggerRealtimeAutoSave(updated);
+      return updated;
+    });
 
     setSaveSuccessMsg(`Applied car default run (${targetKm} KM / ${targetHours}h) to all active rows!`);
     setTimeout(() => setSaveSuccessMsg(null), 3000);
@@ -948,6 +1070,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
         driverBatta: isOff ? 0 : row.driverBatta,
         dayTotalAmount: total
       };
+      triggerRealtimeAutoSave(copy);
       return copy;
     });
   };
@@ -968,50 +1091,22 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const grandTotalAmount = rows.reduce((sum, r) => sum + (Number(r.dayTotalAmount) || 0), 0);
   const totalWorkingDays = rows.filter(r => !r.isOffDay && r.totalKm > 0).length;
 
-  // Save all rows to AppContext duty slips
-  const handleSaveAllSlips = () => {
-    rows.forEach(r => {
-      const existing = dutySlips.find(
-        ds => ds.vehicleId === selectedVehicleId && ds.date === r.dateStr
-      );
-
-      const slipPayload: Omit<DutySlip, 'id' | 'status'> = {
-        dutySlipNo: r.dutySlipNo,
-        date: r.dateStr,
-        vehicleId: selectedVehicleId,
-        clientId: selectedClientId,
-        route: r.route,
-        extraDuty: r.extraDuty,
-        extraDutyCharges: Number(r.extraDutyCharges) || 0,
-        driverName: driverName,
-        startKm: r.startKm,
-        endKm: r.endKm,
-        totalKm: r.totalKm,
-        garageOutKm: r.garageOutKm,
-        garageInKm: r.garageInKm,
-        garageKm: r.garageKm,
-        startTime: r.startTime,
-        endTime: r.endTime,
-        totalHours: r.totalHours,
-        extraHours: r.extraHours,
-        nightCharges: Number(r.nightCharges) || 0,
-        parkingCharges: Number(r.parkingCharges) || 0,
-        tollCharges: Number(r.tollCharges) || 0,
-        driverBatta: Number(r.driverBatta) || 0,
-        fuelCharges: 0,
-        otherExpenses: Number(r.overtimeCharges) || 0,
-        notes: r.notes,
-      };
-
-      if (existing) {
-        updateDutySlip(existing.id, slipPayload);
-      } else {
-        addDutySlip(slipPayload);
-      }
-    });
-
-    setSaveSuccessMsg(`Saved ${rows.length} daily logs for ${new Date(selectedYear, selectedMonth).toLocaleString('en-US', { month: 'long', year: 'numeric' })}!`);
-    setTimeout(() => setSaveSuccessMsg(null), 3500);
+  // Save all rows to AppContext duty slips and backend database in realtime
+  const handleSaveAllSlips = async () => {
+    if (!selectedVehicleId || !selectedClientId || rows.length === 0) return;
+    setIsAutoSaving(true);
+    try {
+      const payloads = rows.map(r => buildSlipPayload(r));
+      await batchUpsertDutySlips(payloads);
+      const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLastAutoSavedAt(timeStr);
+      setSaveSuccessMsg(`⚡ Auto-saved ${rows.length} daily logs to Database in realtime! (${timeStr})`);
+      setTimeout(() => setSaveSuccessMsg(null), 3500);
+    } catch (err) {
+      console.error('Failed to save slips to database:', err);
+    } finally {
+      setIsAutoSaving(false);
+    }
   };
 
   const selectedMonthName = new Date(selectedYear, selectedMonth).toLocaleString('en-US', { month: 'long', year: 'numeric' });
@@ -1019,7 +1114,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const selectedCli = clients.find(c => c.id === selectedClientId);
 
   const handleTriggerDirectDownload = async () => {
-    handleSaveAllSlips();
+    await handleSaveAllSlips();
     setIsDownloadingPdf(true);
     const elementId = 'bishal-sheet-preview-render-modal';
     const filename = `${company.businessName || 'BISHAL_TRAVELS'}_${selectedVeh?.regNumber || 'Vehicle'}_${selectedMonthName.replace(/\s+/g, '_')}`;
@@ -1037,7 +1132,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl border border-slate-800 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
               <h2 className="text-xl sm:text-2xl font-black text-white">
                 Daily Car Run & Surcharge Sheet (1st to 31st)
               </h2>
@@ -1047,6 +1142,25 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                   : 'bg-amber-950 text-amber-300 border-amber-500'
               }`}>
                 {calcMode === 'both_km_and_overtime' ? '⚡ Dual Mode: Both KM & OT Active' : '⚙️ Previous Logic: Highest Extra'}
+              </span>
+
+              {/* Real-time DB Auto-Save Live Badge */}
+              <span className={`inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-bold border transition-all ${
+                isAutoSaving
+                  ? 'bg-amber-950/80 text-amber-300 border-amber-500/80 animate-pulse'
+                  : 'bg-emerald-950/80 text-emerald-300 border-emerald-500/80'
+              }`}>
+                <Database className="w-3.5 h-3.5 text-emerald-400" />
+                {isAutoSaving ? (
+                  <span>Auto-saving to Database...</span>
+                ) : lastAutoSavedAt ? (
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Realtime Auto-saved ({lastAutoSavedAt})</span>
+                  </span>
+                ) : (
+                  <span>Realtime Database Sync Active</span>
+                )}
               </span>
             </div>
             <p className="text-xs text-slate-400">
@@ -1458,7 +1572,14 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       {/* Clean Full Month Spreadsheet Table (1st to 31st) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto max-h-[650px] overflow-y-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table 
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                flushAutoSave();
+              }
+            }}
+            className="w-full text-left border-collapse text-xs"
+          >
             <thead className="sticky top-0 z-20 bg-slate-900 text-white font-bold text-[10px] uppercase tracking-wider">
               <tr>
                 <th className="py-2.5 px-2.5 w-14 text-center border-r border-slate-700">Day / Date</th>
@@ -2088,10 +2209,12 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
           <button
             onClick={handleSaveAllSlips}
-            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm transition-colors"
+            disabled={isAutoSaving}
+            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm transition-colors border border-slate-700"
+            title="Immediately synchronize all 31 days of duty slips to database"
           >
-            <Save className="w-4 h-4 text-emerald-400" />
-            <span>Save Monthly Log</span>
+            <Database className={`w-4 h-4 ${isAutoSaving ? 'animate-spin text-amber-400' : 'text-emerald-400'}`} />
+            <span>{isAutoSaving ? 'Syncing to DB...' : 'Save to Database Now'}</span>
           </button>
 
           <button

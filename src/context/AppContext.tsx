@@ -30,6 +30,8 @@ interface AppContextType {
   addDutySlip: (dutySlip: Omit<DutySlip, 'id' | 'status'>) => DutySlip;
   updateDutySlip: (id: string, dutySlip: Partial<DutySlip>) => void;
   deleteDutySlip: (id: string) => void;
+  upsertDutySlip: (dutySlip: Partial<DutySlip> & { dutySlipNo: string; date: string; vehicleId: string; clientId: string }) => Promise<DutySlip>;
+  batchUpsertDutySlips: (dutySlips: (Partial<DutySlip> & { dutySlipNo: string; date: string; vehicleId: string; clientId: string })[]) => Promise<DutySlip[]>;
   
   invoices: Invoice[];
   createInvoice: (invoice: Omit<Invoice, 'id' | 'createdAt'>) => Invoice;
@@ -57,6 +59,44 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+const DUTYSLIP_OUTBOX_KEY = 'bishal_travels_dutyslip_outbox';
+
+function getOfflineDutySlips(): any[] {
+  try {
+    const raw = localStorage.getItem(DUTYSLIP_OUTBOX_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function queueOfflineDutySlip(slip: any) {
+  try {
+    const list = getOfflineDutySlips();
+    const filtered = list.filter(item => 
+      item.id !== slip.id && !(item.vehicleId === slip.vehicleId && item.date === slip.date)
+    );
+    filtered.push(slip);
+    localStorage.setItem(DUTYSLIP_OUTBOX_KEY, JSON.stringify(filtered));
+  } catch {
+    // ignore
+  }
+}
+
+async function flushOfflineDutySlips(onSuccess?: (synced: DutySlip[]) => void) {
+  try {
+    const list = getOfflineDutySlips();
+    if (!list || list.length === 0) return;
+    const synced = await api.dutySlips.batchUpsert(list);
+    if (synced && synced.length > 0) {
+      localStorage.removeItem(DUTYSLIP_OUTBOX_KEY);
+      if (onSuccess) onSuccess(synced);
+    }
+  } catch {
+    // will retry
+  }
+}
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [data, setData] = useState<AppStateData>(loadInitialData);
@@ -121,15 +161,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const onAuthLogin = () => {
       refreshFromCloud();
+      flushOfflineDutySlips(synced => {
+        setData(prev => {
+          const map = new Map(synced.map(s => [s.id, s]));
+          return {
+            ...prev,
+            dutySlips: prev.dutySlips.map(ds => map.get(ds.id) || ds)
+          };
+        });
+      });
     };
 
     window.addEventListener('auth:login', onAuthLogin);
 
-    // Auto-reconnect polling every 12s if currently disconnected
+    // Auto-reconnect polling every 12s if currently disconnected + flush outbox
     const retryTimer = setInterval(() => {
       if (!isCloudConnected) {
         refreshFromCloud();
       }
+      flushOfflineDutySlips(synced => {
+        setData(prev => {
+          const map = new Map(synced.map(s => [s.id, s]));
+          return {
+            ...prev,
+            dutySlips: prev.dutySlips.map(ds => map.get(ds.id) || ds)
+          };
+        });
+      });
     }, 12000);
 
     return () => {
@@ -256,43 +314,174 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const upsertDutySlip = async (dutyData: Partial<DutySlip> & { dutySlipNo: string; date: string; vehicleId: string; clientId: string }): Promise<DutySlip> => {
+    const tempId = dutyData.id || `ds-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const optimisticSlip: DutySlip = {
+      id: tempId,
+      dutySlipNo: dutyData.dutySlipNo,
+      date: dutyData.date,
+      vehicleId: dutyData.vehicleId,
+      clientId: dutyData.clientId,
+      route: dutyData.route || 'Local Duty',
+      driverName: dutyData.driverName || 'Driver',
+      startKm: dutyData.startKm || 0,
+      endKm: dutyData.endKm || 0,
+      totalKm: dutyData.totalKm || Math.max(0, (dutyData.endKm || 0) - (dutyData.startKm || 0)),
+      garageOutKm: dutyData.garageOutKm,
+      garageInKm: dutyData.garageInKm,
+      garageKm: dutyData.garageKm,
+      startTime: dutyData.startTime || '08:30',
+      endTime: dutyData.endTime || '18:30',
+      totalHours: dutyData.totalHours || 10,
+      extraHours: dutyData.extraHours || 0,
+      extraDuty: dutyData.extraDuty,
+      extraDutyCharges: dutyData.extraDutyCharges || 0,
+      nightCharges: dutyData.nightCharges || 0,
+      parkingCharges: dutyData.parkingCharges || 0,
+      tollCharges: dutyData.tollCharges || 0,
+      driverBatta: dutyData.driverBatta || 0,
+      fuelCharges: dutyData.fuelCharges || 0,
+      otherExpenses: dutyData.otherExpenses || 0,
+      notes: dutyData.notes || '',
+      status: dutyData.status || 'Pending'
+    };
+
+    // 1. Instant local state update
+    setData(prev => {
+      const idx = prev.dutySlips.findIndex(ds => 
+        (dutyData.id && ds.id === dutyData.id) ||
+        (ds.vehicleId === dutyData.vehicleId && ds.date === dutyData.date) ||
+        (ds.dutySlipNo && ds.dutySlipNo.toUpperCase() === dutyData.dutySlipNo.toUpperCase())
+      );
+      if (idx >= 0) {
+        const copy = [...prev.dutySlips];
+        copy[idx] = { ...copy[idx], ...optimisticSlip, id: copy[idx].id };
+        return { ...prev, dutySlips: copy };
+      }
+      return { ...prev, dutySlips: [optimisticSlip, ...prev.dutySlips] };
+    });
+
+    // 2. Real-time Database Persistence
+    try {
+      const saved = await api.dutySlips.upsert(dutyData);
+      if (saved && saved.id) {
+        setData(prev => ({
+          ...prev,
+          dutySlips: prev.dutySlips.map(ds => 
+            (ds.id === tempId || ds.id === saved.id || (ds.vehicleId === saved.vehicleId && ds.date === saved.date))
+              ? saved 
+              : ds
+          )
+        }));
+        setIsCloudConnected(true);
+        return saved;
+      }
+    } catch (err) {
+      console.warn('[Realtime Auto-Save]: Saved locally, queued for database sync:', err);
+      queueOfflineDutySlip(optimisticSlip);
+    }
+
+    return optimisticSlip;
+  };
+
+  const batchUpsertDutySlips = async (slips: (Partial<DutySlip> & { dutySlipNo: string; date: string; vehicleId: string; clientId: string })[]): Promise<DutySlip[]> => {
+    if (!slips || slips.length === 0) return [];
+
+    // Optimistic local state update
+    setData(prev => {
+      let currentSlips = [...prev.dutySlips];
+      slips.forEach(s => {
+        const idx = currentSlips.findIndex(ds => 
+          (s.id && ds.id === s.id) || 
+          (ds.vehicleId === s.vehicleId && ds.date === s.date)
+        );
+        const fullSlip: DutySlip = {
+          id: s.id || `ds-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          dutySlipNo: s.dutySlipNo,
+          date: s.date,
+          vehicleId: s.vehicleId,
+          clientId: s.clientId,
+          route: s.route || 'Local Duty',
+          driverName: s.driverName || 'Driver',
+          startKm: s.startKm || 0,
+          endKm: s.endKm || 0,
+          totalKm: s.totalKm || 0,
+          garageOutKm: s.garageOutKm,
+          garageInKm: s.garageInKm,
+          garageKm: s.garageKm,
+          startTime: s.startTime || '08:30',
+          endTime: s.endTime || '18:30',
+          totalHours: s.totalHours || 10,
+          extraHours: s.extraHours || 0,
+          extraDuty: s.extraDuty,
+          extraDutyCharges: s.extraDutyCharges || 0,
+          nightCharges: s.nightCharges || 0,
+          parkingCharges: s.parkingCharges || 0,
+          tollCharges: s.tollCharges || 0,
+          driverBatta: s.driverBatta || 0,
+          fuelCharges: s.fuelCharges || 0,
+          otherExpenses: s.otherExpenses || 0,
+          notes: s.notes || '',
+          status: s.status || 'Pending'
+        };
+
+        if (idx >= 0) {
+          currentSlips[idx] = { ...currentSlips[idx], ...fullSlip, id: currentSlips[idx].id };
+        } else {
+          currentSlips.unshift(fullSlip);
+        }
+      });
+      return { ...prev, dutySlips: currentSlips };
+    });
+
+    // Realtime Database save
+    try {
+      const savedList = await api.dutySlips.batchUpsert(slips);
+      if (savedList && savedList.length > 0) {
+        setData(prev => {
+          const idMap = new Map(savedList.map(s => [s.id, s]));
+          const vdMap = new Map(savedList.map(s => [`${s.vehicleId}_${s.date}`, s]));
+          return {
+            ...prev,
+            dutySlips: prev.dutySlips.map(ds => {
+              if (idMap.has(ds.id)) return idMap.get(ds.id)!;
+              const key = `${ds.vehicleId}_${ds.date}`;
+              if (vdMap.has(key)) return vdMap.get(key)!;
+              return ds;
+            })
+          };
+        });
+        setIsCloudConnected(true);
+        return savedList;
+      }
+    } catch (err) {
+      console.warn('[Realtime Batch Auto-Save]: Queued for database sync:', err);
+      slips.forEach(s => queueOfflineDutySlip(s));
+    }
+
+    return slips as any;
+  };
+
   const addDutySlip = (dutyData: Omit<DutySlip, 'id' | 'status'>): DutySlip => {
     const newDutySlip: DutySlip = {
       ...dutyData,
       id: `ds-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       status: 'Pending'
     };
-    setData(prev => ({
-      ...prev,
-      dutySlips: [newDutySlip, ...prev.dutySlips]
-    }));
-
-    if (isCloudConnected) {
-      api.dutySlips.create(dutyData)
-        .then(created => {
-          if (created && created.id) {
-            setData(prev => ({
-              ...prev,
-              dutySlips: prev.dutySlips.map(ds => ds.id === newDutySlip.id ? created : ds)
-            }));
-          }
-        })
-        .catch(err => console.error('Failed to add duty slip to cloud:', err));
-    }
-
+    upsertDutySlip(newDutySlip);
     return newDutySlip;
   };
 
   const updateDutySlip = (id: string, dutyData: Partial<DutySlip>) => {
-    setData(prev => ({
-      ...prev,
-      dutySlips: prev.dutySlips.map(ds => ds.id === id ? { ...ds, ...dutyData } : ds)
-    }));
-
-    if (isCloudConnected) {
-      api.dutySlips.update(id, dutyData).catch(err => {
-        console.error('Failed to update duty slip on cloud:', err);
-      });
+    const existing = data.dutySlips.find(ds => ds.id === id);
+    if (existing) {
+      upsertDutySlip({ ...existing, ...dutyData, id });
+    } else {
+      setData(prev => ({
+        ...prev,
+        dutySlips: prev.dutySlips.map(ds => ds.id === id ? { ...ds, ...dutyData } : ds)
+      }));
+      api.dutySlips.update(id, dutyData).catch(() => {});
     }
   };
 
@@ -440,6 +629,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addDutySlip,
       updateDutySlip,
       deleteDutySlip,
+      upsertDutySlip,
+      batchUpsertDutySlips,
       invoices: data.invoices,
       createInvoice,
       updateInvoice,
