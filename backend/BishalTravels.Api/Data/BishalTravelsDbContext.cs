@@ -37,7 +37,8 @@ public class BishalTravelsDbContext : DbContext
         // Duty Slip Configuration
         modelBuilder.Entity<DutySlip>(entity =>
         {
-            entity.HasIndex(d => d.DutySlipNo).IsUnique();
+            entity.HasIndex(d => d.DutySlipNo);
+            entity.HasIndex(d => new { d.VehicleId, d.Date });
             entity.HasIndex(d => d.Status);
             entity.HasIndex(d => d.Date);
 

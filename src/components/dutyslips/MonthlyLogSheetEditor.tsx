@@ -323,9 +323,14 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     const generatedRows: DailyRowData[] = [];
     let rollingKm = initialStartKm;
 
+    const monthPadded = String(selectedMonth + 1).padStart(2, '0');
+    const vehCode = veh?.regNumber ? `${veh.regNumber.replace(/[^a-zA-Z0-9]/g, '').slice(-4)}-` : '';
+
     for (let day = 1; day <= daysInMonth; day++) {
       const dateObj = new Date(selectedYear, selectedMonth, day);
-      const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dayPadded = String(day).padStart(2, '0');
+      const dateStr = `${selectedYear}-${monthPadded}-${dayPadded}`;
+      const defaultSlipNo = `DS-${vehCode}${selectedYear}${monthPadded}-${dayPadded}`;
       const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
       const isSunday = dateObj.getDay() === 0;
 
@@ -367,7 +372,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           dayName,
           isSunday,
           isOffDay: isOff,
-          dutySlipNo: existing.dutySlipNo || `DS-${selectedYear}-${String(day).padStart(2, '0')}`,
+          dutySlipNo: existing.dutySlipNo || defaultSlipNo,
           route: existing.route || (isSunday ? 'Sunday Off / Garage Maintenance' : 'Local Corporate Movement'),
           extraDuty: existing.extraDuty || (isOff ? 'Day Off' : 'Regular Duty'),
           extraDutyCharges: extraDutyAmt,
@@ -427,7 +432,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           dayName,
           isSunday,
           isOffDay: isOff,
-          dutySlipNo: `DS-${selectedYear}-${String(day).padStart(2, '0')}`,
+          dutySlipNo: defaultSlipNo,
           route: isOff ? 'Sunday Off / Garage Maintenance' : 'Local Corporate Movement & Office Duty',
           extraDuty: isOff ? 'Day Off' : 'Regular Duty',
           extraDutyCharges: 0,

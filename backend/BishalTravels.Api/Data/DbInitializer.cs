@@ -155,7 +155,7 @@ public static class DbInitializer
 
                 CREATE TABLE IF NOT EXISTS duty_slips (
                     id VARCHAR(50) PRIMARY KEY,
-                    duty_slip_no VARCHAR(50) UNIQUE NOT NULL,
+                    duty_slip_no VARCHAR(50) NOT NULL,
                     date VARCHAR(30) NOT NULL,
                     vehicle_id VARCHAR(50) NOT NULL REFERENCES vehicles(id) ON DELETE RESTRICT,
                     client_id VARCHAR(50) NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
@@ -186,6 +186,63 @@ public static class DbInitializer
                     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
 
+                -- Auto-Migration & Schema Evolution Patches (Idempotent for pre-existing databases):
+                ALTER TABLE duty_slips ADD COLUMN IF NOT EXISTS garage_out_km NUMERIC(18,2);
+                ALTER TABLE duty_slips ADD COLUMN IF NOT EXISTS garage_in_km NUMERIC(18,2);
+                ALTER TABLE duty_slips ADD COLUMN IF NOT EXISTS garage_km NUMERIC(18,2);
+                ALTER TABLE duty_slips ADD COLUMN IF NOT EXISTS extra_duty VARCHAR(100);
+                ALTER TABLE duty_slips ADD COLUMN IF NOT EXISTS extra_duty_charges NUMERIC(18,2);
+                ALTER TABLE duty_slips ADD COLUMN IF NOT EXISTS notes TEXT;
+                ALTER TABLE duty_slips ADD COLUMN IF NOT EXISTS invoice_id VARCHAR(50);
+                ALTER TABLE duty_slips ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'Pending';
+
+                ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS garage_rate_per_km NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS default_daily_km NUMERIC(18,2) DEFAULT 100;
+                ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS default_daily_hours NUMERIC(18,2) DEFAULT 10;
+                ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS base_monthly_rate NUMERIC(18,2) DEFAULT 40000;
+                ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS rate_per_km NUMERIC(18,2) DEFAULT 18;
+                ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS rate_per_hour NUMERIC(18,2) DEFAULT 90;
+                ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS night_charge_rate NUMERIC(18,2) DEFAULT 350;
+
+                ALTER TABLE invoices ADD COLUMN IF NOT EXISTS client_snapshot_json TEXT DEFAULT '{}';
+                ALTER TABLE invoices ADD COLUMN IF NOT EXISTS contract_ref_no VARCHAR(100) DEFAULT '';
+                ALTER TABLE invoices ADD COLUMN IF NOT EXISTS attached_duty_slip_ids_json TEXT DEFAULT '[]';
+                ALTER TABLE invoices ADD COLUMN IF NOT EXISTS trade_license_no VARCHAR(100) DEFAULT '';
+                ALTER TABLE invoices ADD COLUMN IF NOT EXISTS company_gstin VARCHAR(50) DEFAULT '';
+                ALTER TABLE invoices ADD COLUMN IF NOT EXISTS company_pan VARCHAR(50) DEFAULT '';
+                ALTER TABLE invoices ADD COLUMN IF NOT EXISTS company_phone VARCHAR(50) DEFAULT '';
+                ALTER TABLE invoices ADD COLUMN IF NOT EXISTS company_email VARCHAR(100) DEFAULT '';
+                ALTER TABLE invoices ADD COLUMN IF NOT EXISTS company_address VARCHAR(500) DEFAULT '';
+                ALTER TABLE invoices ADD COLUMN IF NOT EXISTS terms_json TEXT DEFAULT '[]';
+                ALTER TABLE invoices ADD COLUMN IF NOT EXISTS bank_details_json TEXT DEFAULT '{}';
+                ALTER TABLE invoices ADD COLUMN IF NOT EXISTS amount_in_words VARCHAR(500) DEFAULT '';
+
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS billing_type VARCHAR(50) DEFAULT 'DutySlipAggregated';
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS base_package_amount NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS total_run_km NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS rate_per_km NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS km_charges NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS extra_km NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS extra_km_rate NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS extra_km_charges NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS extra_hours NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS extra_hour_rate NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS extra_hour_charges NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS night_charges NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS parking_charges NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS toll_charges NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS driver_allowance NUMERIC(18,2) DEFAULT 0;
+                ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS other_charges NUMERIC(18,2) DEFAULT 0;
+
+                -- Safely drop legacy global unique constraint on duty_slip_no so fleet multi-vehicle sheets never collide
+                ALTER TABLE duty_slips DROP CONSTRAINT IF EXISTS duty_slips_duty_slip_no_key;
+                ALTER TABLE duty_slips DROP CONSTRAINT IF EXISTS duty_slips_duty_slip_no_unique;
+                DROP INDEX IF EXISTS duty_slips_duty_slip_no_key;
+                DROP INDEX IF EXISTS idx_duty_slips_duty_slip_no_unique;
+
+                -- Query Optimization Indexes
+                CREATE INDEX IF NOT EXISTS idx_duty_slips_duty_slip_no ON duty_slips(duty_slip_no);
+                CREATE INDEX IF NOT EXISTS idx_duty_slips_vehicle_date ON duty_slips(vehicle_id, date);
                 CREATE INDEX IF NOT EXISTS idx_duty_slips_status ON duty_slips(status);
                 CREATE INDEX IF NOT EXISTS idx_duty_slips_client ON duty_slips(client_id);
                 CREATE INDEX IF NOT EXISTS idx_duty_slips_vehicle ON duty_slips(vehicle_id);
