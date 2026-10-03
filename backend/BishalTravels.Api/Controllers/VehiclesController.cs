@@ -20,6 +20,7 @@ public class VehiclesController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<Vehicle>>> GetVehicles()
     {
         var fleet = await _mediator.Send(new GetFleetQuery());
@@ -27,6 +28,7 @@ public class VehiclesController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<ActionResult<Vehicle>> GetVehicle(string id)
     {
         var vehicle = await _mediator.Send(new GetVehicleByIdQuery(id));

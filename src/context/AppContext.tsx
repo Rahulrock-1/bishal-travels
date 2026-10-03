@@ -124,16 +124,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         api.invoices.getAll().catch(() => null)
       ]);
 
-      if (cloudCompany) {
-        setData(prev => ({
-          ...prev,
-          company: cloudCompany,
-          vehicles: cloudVehicles ?? prev.vehicles,
-          clients: cloudClients ?? prev.clients,
-          dutySlips: cloudDutySlips ?? prev.dutySlips,
-          invoices: cloudInvoices ?? prev.invoices,
-          setupCompleted: true
-        }));
+      // Check if we received any domain entity from cloud
+      const hasAnyData = !!(
+        cloudCompany || 
+        (cloudVehicles && cloudVehicles.length > 0) || 
+        (cloudClients && cloudClients.length > 0) || 
+        (cloudDutySlips && cloudDutySlips.length > 0) || 
+        (cloudInvoices && cloudInvoices.length > 0)
+      );
+
+      if (hasAnyData) {
+        setData(prev => {
+          let mergedDutySlips = prev.dutySlips;
+          if (cloudDutySlips && cloudDutySlips.length > 0) {
+            const cloudKeySet = new Set<string>();
+            cloudDutySlips.forEach(s => {
+              if (s.id) cloudKeySet.add(s.id);
+              const cleanDate = (s.date || '').split('T')[0];
+              cloudKeySet.add(`${s.vehicleId}_${cleanDate}`);
+            });
+            // Keep local-only slips not present in cloud
+            const localOnly = prev.dutySlips.filter(s => {
+              const cleanDate = (s.date || '').split('T')[0];
+              return !cloudKeySet.has(s.id) && !cloudKeySet.has(`${s.vehicleId}_${cleanDate}`);
+            });
+            mergedDutySlips = [...cloudDutySlips, ...localOnly];
+          }
+
+          return {
+            ...prev,
+            company: cloudCompany ?? prev.company,
+            vehicles: (cloudVehicles && cloudVehicles.length > 0) ? cloudVehicles : prev.vehicles,
+            clients: (cloudClients && cloudClients.length > 0) ? cloudClients : prev.clients,
+            dutySlips: (cloudDutySlips && cloudDutySlips.length > 0) ? mergedDutySlips : prev.dutySlips,
+            invoices: (cloudInvoices && cloudInvoices.length > 0) ? cloudInvoices : prev.invoices,
+            setupCompleted: cloudCompany ? true : prev.setupCompleted
+          };
+        });
         setIsCloudConnected(true);
       } else {
         // Fallback: check public health endpoint
@@ -347,10 +374,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     // 1. Instant local state update
+    const dutyDateClean = (dutyData.date || '').split('T')[0];
     setData(prev => {
       const idx = prev.dutySlips.findIndex(ds => 
         (dutyData.id && ds.id === dutyData.id) ||
-        (ds.vehicleId === dutyData.vehicleId && ds.date === dutyData.date) ||
+        (ds.vehicleId === dutyData.vehicleId && (ds.date || '').split('T')[0] === dutyDateClean) ||
         (ds.dutySlipNo && ds.dutySlipNo.toUpperCase() === dutyData.dutySlipNo.toUpperCase())
       );
       if (idx >= 0) {
@@ -365,14 +393,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const saved = await api.dutySlips.upsert(dutyData);
       if (saved && saved.id) {
-        setData(prev => ({
-          ...prev,
-          dutySlips: prev.dutySlips.map(ds => 
-            (ds.id === tempId || ds.id === saved.id || (ds.vehicleId === saved.vehicleId && ds.date === saved.date))
-              ? saved 
-              : ds
-          )
-        }));
+        setData(prev => {
+          const savedDateClean = (saved.date || '').split('T')[0];
+          return {
+            ...prev,
+            dutySlips: prev.dutySlips.map(ds => {
+              const dsDateClean = (ds.date || '').split('T')[0];
+              return (ds.id === tempId || ds.id === saved.id || (ds.vehicleId === saved.vehicleId && dsDateClean === savedDateClean))
+                ? saved 
+                : ds;
+            })
+          };
+        });
         setIsCloudConnected(true);
         return saved;
       }
@@ -391,14 +423,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setData(prev => {
       let currentSlips = [...prev.dutySlips];
       slips.forEach(s => {
-        const idx = currentSlips.findIndex(ds => 
-          (s.id && ds.id === s.id) || 
-          (ds.vehicleId === s.vehicleId && ds.date === s.date)
-        );
+        const sCleanDate = (s.date || '').split('T')[0];
+        const idx = currentSlips.findIndex(ds => {
+          const dsCleanDate = (ds.date || '').split('T')[0];
+          return (s.id && ds.id === s.id) || 
+            (ds.vehicleId === s.vehicleId && dsCleanDate === sCleanDate);
+        });
         const fullSlip: DutySlip = {
           id: s.id || `ds-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
           dutySlipNo: s.dutySlipNo,
-          date: s.date,
+          date: sCleanDate,
           vehicleId: s.vehicleId,
           clientId: s.clientId,
           route: s.route || 'Local Duty',
@@ -440,12 +474,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (savedList && savedList.length > 0) {
         setData(prev => {
           const idMap = new Map(savedList.map(s => [s.id, s]));
-          const vdMap = new Map(savedList.map(s => [`${s.vehicleId}_${s.date}`, s]));
+          const vdMap = new Map(savedList.map(s => [`${s.vehicleId}_${(s.date || '').split('T')[0]}`, s]));
           return {
             ...prev,
             dutySlips: prev.dutySlips.map(ds => {
               if (idMap.has(ds.id)) return idMap.get(ds.id)!;
-              const key = `${ds.vehicleId}_${ds.date}`;
+              const key = `${ds.vehicleId}_${(ds.date || '').split('T')[0]}`;
               if (vdMap.has(key)) return vdMap.get(key)!;
               return ds;
             })

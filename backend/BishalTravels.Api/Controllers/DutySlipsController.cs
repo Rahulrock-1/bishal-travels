@@ -20,6 +20,7 @@ public class DutySlipsController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<DutySlip>>> GetDutySlips(
         [FromQuery] string? status, 
         [FromQuery] string? clientId, 
@@ -30,6 +31,7 @@ public class DutySlipsController : ControllerBase
     }
 
     [HttpGet("unbilled")]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<DutySlip>>> GetUnbilledDutySlips(
         [FromQuery] string? clientId, 
         [FromQuery] string? vehicleId)
@@ -39,6 +41,7 @@ public class DutySlipsController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<ActionResult<DutySlip>> GetDutySlip(string id)
     {
         var dutySlip = await _mediator.Send(new GetDutySlipByIdQuery(id));

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   Calendar, 
   Car, 
@@ -93,6 +93,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const [lastAutoSavedAt, setLastAutoSavedAt] = useState<string | null>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pendingRowsRef = useRef<DailyRowData[] | null>(null);
+  const userInteractedVehicleRef = useRef<boolean>(false);
 
   // Vehicle Active/Inactive filter (Default: 'Active' so only active vehicles are listed by default)
   const [vehicleStatusFilter, setVehicleStatusFilter] = useState<'Active' | 'All' | 'Inactive'>('Active');
@@ -151,7 +152,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   // Build backend payload for a single daily row
   const buildSlipPayload = useCallback((r: DailyRowData) => {
     const existing = dutySlips.find(
-      ds => ds.vehicleId === selectedVehicleId && ds.date === r.dateStr
+      ds => (ds.vehicleId?.toLowerCase() === selectedVehicleId.toLowerCase()) && 
+            ((ds.date || '').split('T')[0] === r.dateStr)
     );
     return {
       id: existing?.id,
@@ -255,6 +257,83 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     }
   }, [selectedVehicleId, vehicles]);
 
+  // Auto-switch to vehicle that has saved duty slips in this month if user hasn't explicitly picked a vehicle
+  useEffect(() => {
+    if (userInteractedVehicleRef.current || !dutySlips.length) return;
+    const monthPrefix = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
+    
+    // Check if current vehicle has slips in this month
+    const currentHasSlips = dutySlips.some(
+      ds => (ds.vehicleId?.toLowerCase() === selectedVehicleId.toLowerCase()) && 
+            (ds.date || '').split('T')[0].startsWith(monthPrefix)
+    );
+    if (!currentHasSlips) {
+      // Find another vehicle that has slips in this month
+      const slipThisMonth = dutySlips.find(ds => (ds.date || '').split('T')[0].startsWith(monthPrefix));
+      if (slipThisMonth && slipThisMonth.vehicleId) {
+        const foundVeh = vehicles.find(v => v.id.toLowerCase() === slipThisMonth.vehicleId.toLowerCase());
+        if (foundVeh && foundVeh.id !== selectedVehicleId) {
+          setSelectedVehicleId(foundVeh.id);
+        }
+      }
+    }
+  }, [dutySlips, selectedYear, selectedMonth, selectedVehicleId, vehicles]);
+
+  // Saved duty slips matching current vehicle and current month
+  const matchingSlips = useMemo(() => {
+    const monthPrefix = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
+    const veh = vehicles.find(v => v.id === selectedVehicleId) || vehicles[0];
+    const vehReg = (veh?.regNumber || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const currentVehId = (selectedVehicleId || '').toLowerCase().trim();
+
+    return dutySlips.filter(ds => {
+      const slipVehId = (ds.vehicleId || '').toLowerCase().trim();
+      const slipVehMatches = slipVehId === currentVehId || (vehReg && slipVehId.includes(vehReg));
+      const cleanDate = (ds.date || '').split('T')[0].trim();
+      return slipVehMatches && cleanDate.startsWith(monthPrefix);
+    });
+  }, [dutySlips, selectedVehicleId, selectedYear, selectedMonth, vehicles]);
+
+  // Summaries of all vehicles and months that have saved slips in database
+  interface SavedDutySummary {
+    vehicleId: string;
+    vehicleReg: string;
+    year: number;
+    month: number;
+    monthName: string;
+    count: number;
+  }
+
+  const availableSavedSummaries: SavedDutySummary[] = useMemo(() => {
+    const summaryMap = new Map<string, SavedDutySummary>();
+    dutySlips.forEach(s => {
+      const cleanDate = (s.date || '').split('T')[0];
+      const parts = cleanDate.split('-');
+      if (parts.length >= 2) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        if (!isNaN(y) && !isNaN(m)) {
+          const veh = vehicles.find(v => v.id?.toLowerCase() === s.vehicleId?.toLowerCase());
+          const reg = veh?.regNumber || s.vehicleId;
+          const key = `${s.vehicleId}_${y}_${m}`;
+          const monthName = new Date(y, m, 1).toLocaleString('en-US', { month: 'short' });
+          if (!summaryMap.has(key)) {
+            summaryMap.set(key, { 
+              vehicleId: veh?.id || s.vehicleId, 
+              vehicleReg: reg, 
+              year: y, 
+              month: m, 
+              monthName, 
+              count: 0 
+            });
+          }
+          summaryMap.get(key)!.count += 1;
+        }
+      }
+    });
+    return Array.from(summaryMap.values()).sort((a, b) => (b.year * 12 + b.month) - (a.year * 12 + a.month));
+  }, [dutySlips, vehicles]);
+
   // Compute row total amount supporting both calculation modes
   const computeRowTotal = (
     km: number,
@@ -315,25 +394,68 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     }
   };
 
-  // Generate rows for all days in the selected month & year
+  // Generate & Hydrate rows for all days in the selected month & year
   useEffect(() => {
+    // If user is actively typing and auto-save timer is ticking, don't overwrite rows
+    if (pendingRowsRef.current && pendingRowsRef.current.length > 0) {
+      return;
+    }
+
     const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
     const veh = vehicles.find(v => v.id === selectedVehicleId) || vehicles[0];
+    const vehReg = (veh?.regNumber || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const currentVehId = (selectedVehicleId || '').toLowerCase().trim();
     const carDefaultKm = veh?.defaultDailyKm || defaultBaseKm || 100;
     const carDefaultHours = veh?.defaultDailyHours || defaultDutyHours || 10;
     
     // Check if there are existing duty slips for this vehicle in this month
     const monthPrefix = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
-    const existingSlips = dutySlips.filter(ds => 
-      ds.vehicleId === selectedVehicleId && ds.date.startsWith(monthPrefix)
-    );
-    const slipMap = new Map(existingSlips.map(s => [s.date, s]));
+    const existingSlips = dutySlips.filter(ds => {
+      const slipVehId = (ds.vehicleId || '').toLowerCase().trim();
+      const slipVehMatches = slipVehId === currentVehId || (vehReg && slipVehId.includes(vehReg));
+      const cleanDate = (ds.date || '').split('T')[0].trim();
+      return slipVehMatches && cleanDate.startsWith(monthPrefix);
+    });
+
+    const slipMap = new Map<string, DutySlip>();
+    existingSlips.forEach(s => {
+      const cleanDate = (s.date || '').split('T')[0].trim();
+      slipMap.set(cleanDate, s);
+      const parts = cleanDate.split('-');
+      if (parts.length === 3) {
+        const d = parseInt(parts[2], 10);
+        if (!isNaN(d)) {
+          slipMap.set(`day_${d}`, s);
+        }
+      }
+    });
+
+    // Sync driver, client, and base odometer from existing records if available
+    if (existingSlips.length > 0) {
+      const firstValidSlip = existingSlips.find(s => s.driverName || s.clientId || s.startKm);
+      if (firstValidSlip?.driverName && !driverName) {
+        setDriverName(firstValidSlip.driverName);
+      }
+      if (firstValidSlip?.clientId && (!selectedClientId || selectedClientId === clients[0]?.id)) {
+        setSelectedClientId(firstValidSlip.clientId);
+      }
+    }
 
     const generatedRows: DailyRowData[] = [];
-    let rollingKm = initialStartKm;
-
     const monthPadded = String(selectedMonth + 1).padStart(2, '0');
     const vehCode = veh?.regNumber ? `${veh.regNumber.replace(/[^a-zA-Z0-9]/g, '').slice(-4)}-` : '';
+
+    // Determine initial rolling Km
+    let rollingKm = initialStartKm;
+    const day1Slip = slipMap.get(`${selectedYear}-${monthPadded}-01`) || slipMap.get('day_1');
+    if (day1Slip && day1Slip.startKm !== undefined && day1Slip.startKm !== null && Number(day1Slip.startKm) > 0) {
+      rollingKm = Number(day1Slip.startKm);
+    } else if (existingSlips.length > 0) {
+      const minOdo = Math.min(...existingSlips.map(s => Number(s.startKm) || initialStartKm).filter(n => n > 0));
+      if (isFinite(minOdo) && minOdo > 0) {
+        rollingKm = minOdo;
+      }
+    }
 
     for (let day = 1; day <= daysInMonth; day++) {
       const dateObj = new Date(selectedYear, selectedMonth, day);
@@ -343,17 +465,29 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
       const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
       const isSunday = dateObj.getDay() === 0;
 
-      const existing = slipMap.get(dateStr);
+      const existing = slipMap.get(dateStr) || slipMap.get(`day_${day}`);
 
       if (existing) {
-        const isOff = existing.totalKm === 0 && (existing.route.toLowerCase().includes('off') || existing.route.toLowerCase().includes('garage'));
-        const kmVal = isOff ? 0 : (existing.totalKm > 0 ? existing.totalKm : carDefaultKm);
-        const hrsVal = isOff ? 0 : (existing.totalHours > 0 ? existing.totalHours : carDefaultHours);
-        const extraHrs = existing.extraHours !== undefined ? existing.extraHours : Math.max(0, hrsVal - defaultDutyHours);
+        const isOff = (existing.totalKm === 0 && (existing.route?.toLowerCase().includes('off') || existing.route?.toLowerCase().includes('garage'))) ||
+          existing.extraDuty?.toLowerCase().includes('off') ||
+          (Number(existing.totalKm) === 0 && Number(existing.totalHours) === 0 && isSunday);
+
+        // DO NOT overwrite saved 0 or custom KM with carDefaultKm!
+        const kmVal = Number(existing.totalKm) || 0;
+        const hrsVal = Number(existing.totalHours) || 0;
+        const extraHrs = existing.extraHours !== undefined && existing.extraHours !== null
+          ? Number(existing.extraHours)
+          : (isOff ? 0 : Math.max(0, hrsVal - defaultDutyHours));
         const otCost = extraHrs * overtimeRatePerHour;
-        const gOut = existing.garageOutKm || 0;
-        const gIn = existing.garageInKm || 0;
-        const gKm = existing.garageKm || computeGarageKm(gOut, gIn, existing.startKm, existing.startKm + kmVal);
+        const gOut = Number(existing.garageOutKm) || 0;
+        const gIn = Number(existing.garageInKm) || 0;
+        const startKmVal = Number(existing.startKm) || rollingKm;
+        const gKm = existing.garageKm !== undefined && existing.garageKm !== null
+          ? Number(existing.garageKm)
+          : computeGarageKm(gOut, gIn, startKmVal, startKmVal + kmVal);
+        const endKmVal = (existing.endKm !== undefined && existing.endKm !== null && Number(existing.endKm) >= startKmVal)
+          ? Number(existing.endKm)
+          : (startKmVal + kmVal);
 
         const extraDutyAmt = Number(existing.extraDutyCharges) || 0;
 
@@ -361,10 +495,10 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           kmVal,
           hrsVal,
           extraHrs,
-          existing.nightCharges,
-          existing.parkingCharges,
-          existing.tollCharges,
-          existing.driverBatta,
+          Number(existing.nightCharges) || 0,
+          Number(existing.parkingCharges) || 0,
+          Number(existing.tollCharges) || 0,
+          Number(existing.driverBatta) || 0,
           ratePerKm,
           overtimeRatePerHour,
           defaultDutyHours,
@@ -385,8 +519,8 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           route: existing.route || (isSunday ? 'Sunday Off / Garage Maintenance' : 'Local Corporate Movement'),
           extraDuty: existing.extraDuty || (isOff ? 'Day Off' : 'Regular Duty'),
           extraDutyCharges: extraDutyAmt,
-          startKm: existing.startKm,
-          endKm: existing.startKm + kmVal,
+          startKm: startKmVal,
+          endKm: endKmVal,
           totalKm: kmVal,
           garageOutKm: gOut,
           garageInKm: gIn,
@@ -396,14 +530,14 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
           totalHours: hrsVal,
           extraHours: extraHrs,
           overtimeCharges: otCost,
-          nightCharges: existing.nightCharges || 0,
-          parkingCharges: existing.parkingCharges || 0,
-          tollCharges: existing.tollCharges || 0,
-          driverBatta: existing.driverBatta || 0,
+          nightCharges: Number(existing.nightCharges) || 0,
+          parkingCharges: Number(existing.parkingCharges) || 0,
+          tollCharges: Number(existing.tollCharges) || 0,
+          driverBatta: Number(existing.driverBatta) || 0,
           dayTotalAmount: dayTotal,
           notes: existing.notes || '',
         });
-        rollingKm = existing.startKm + kmVal;
+        rollingKm = endKmVal;
       } else {
         const isOff = isSunday;
         const start = rollingKm;
@@ -467,7 +601,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     }
 
     setRows(generatedRows);
-  }, [selectedYear, selectedMonth, selectedVehicleId]);
+  }, [selectedYear, selectedMonth, selectedVehicleId, dutySlips, defaultBaseKm, defaultDutyHours, ratePerKm, overtimeRatePerHour, garageRatePerKm, calcMode, showGarageInOut, defaultGarageKm]);
 
   // Helper to re-evaluate rows with cumulative slab distribution (e.g. 2000 KM @ ₹19, excess @ ₹12)
   const recalculateRowsWithCumulativeSlab = useCallback((
@@ -1394,7 +1528,10 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
             <div className="flex gap-1">
               <select
                 value={selectedMonth}
-                onChange={e => setSelectedMonth(Number(e.target.value))}
+                onChange={e => {
+                  userInteractedVehicleRef.current = true;
+                  setSelectedMonth(Number(e.target.value));
+                }}
                 className="w-full px-1.5 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-bold text-xs"
               >
                 {Array.from({ length: 12 }).map((_, i) => (
@@ -1406,7 +1543,10 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
 
               <select
                 value={selectedYear}
-                onChange={e => setSelectedYear(Number(e.target.value))}
+                onChange={e => {
+                  userInteractedVehicleRef.current = true;
+                  setSelectedYear(Number(e.target.value));
+                }}
                 className="px-1.5 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-mono font-bold text-xs"
               >
                 <option value={2025}>2025</option>
@@ -1435,7 +1575,10 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
             </div>
             <select
               value={selectedVehicleId}
-              onChange={e => setSelectedVehicleId(e.target.value)}
+              onChange={e => {
+                userInteractedVehicleRef.current = true;
+                setSelectedVehicleId(e.target.value);
+              }}
               className="w-full px-2 py-1.5 bg-slate-800 text-white border border-slate-700 rounded-lg font-mono font-bold text-xs"
             >
               {filteredVehicles.map(v => (
@@ -1528,6 +1671,71 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
             />
           </div>
         </div>
+      </div>
+
+      {/* Real-time Cloud Sync & Saved Database Records Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 px-4 py-3 bg-slate-900 border border-slate-800 rounded-2xl text-xs shadow-md">
+        <div className="flex items-center gap-2.5">
+          {matchingSlips.length > 0 ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span className="text-emerald-400 font-bold">
+                {matchingSlips.length} Saved Duty Slips Loaded from Database
+              </span>
+              <span className="text-slate-400 text-[11px]">
+                for {currentVeh?.regNumber || 'Vehicle'} ({new Date(selectedYear, selectedMonth, 1).toLocaleString('en-US', { month: 'long' })} {selectedYear})
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-400/80 shrink-0"></span>
+              <span className="text-slate-300 font-medium text-xs">
+                No duty slips saved yet for <strong className="text-white">{currentVeh?.regNumber}</strong> in {new Date(selectedYear, selectedMonth, 1).toLocaleString('en-US', { month: 'long' })} {selectedYear}.
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Quick-switch buttons for other months/vehicles present in database */}
+        {availableSavedSummaries.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-slate-400 font-semibold text-[11px] uppercase tracking-wider">
+              Saved Records in Database:
+            </span>
+            {availableSavedSummaries.map(s => {
+              const isCurrent = s.vehicleId === selectedVehicleId && s.year === selectedYear && s.month === selectedMonth;
+              return (
+                <button
+                  key={`${s.vehicleId}-${s.year}-${s.month}`}
+                  type="button"
+                  onClick={() => {
+                    userInteractedVehicleRef.current = true;
+                    setSelectedVehicleId(s.vehicleId);
+                    setSelectedYear(s.year);
+                    setSelectedMonth(s.month);
+                  }}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    isCurrent
+                      ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/20'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-500'
+                  }`}
+                  title={`Switch to ${s.vehicleReg} - ${s.monthName} ${s.year}`}
+                >
+                  <span>{s.vehicleReg}</span>
+                  <span className="text-[10px] opacity-75">({s.monthName} {s.year})</span>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
+                    isCurrent ? 'bg-slate-950 text-emerald-400' : 'bg-emerald-950 text-emerald-300'
+                  }`}>
+                    {s.count} slips
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {saveSuccessMsg && (

@@ -66,30 +66,42 @@ class ClientSideApiProxy {
     }
   }
 
+  private loginPromise: Promise<string | null> | null = null;
+
   private async ensureAuthToken(): Promise<string | null> {
     const existing = this.getAuthToken();
     if (existing) return existing;
 
-    try {
-      const res = await fetch(`${this.baseUrl}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'rahul@bishaltravels.com', password: 'Rahul@1998' })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.token) {
-          localStorage.setItem('bishal_travels_token', data.token);
-          if (data?.user) {
-            localStorage.setItem('bishal_travels_auth_user', JSON.stringify(data.user));
-          }
-          return data.token;
-        }
-      }
-    } catch {
-      // ignore network errors during silent auth
+    if (this.loginPromise) {
+      return this.loginPromise;
     }
-    return null;
+
+    this.loginPromise = (async () => {
+      try {
+        const res = await fetch(`${this.baseUrl}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'rahul@bishaltravels.com', password: 'Rahul@1998' })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.token) {
+            localStorage.setItem('bishal_travels_token', data.token);
+            if (data?.user) {
+              localStorage.setItem('bishal_travels_auth_user', JSON.stringify(data.user));
+            }
+            return data.token;
+          }
+        }
+      } catch {
+        // ignore network errors during silent auth
+      } finally {
+        this.loginPromise = null;
+      }
+      return null;
+    })();
+
+    return this.loginPromise;
   }
 
   /**

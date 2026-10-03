@@ -20,6 +20,7 @@ public class ClientsController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<Client>>> GetClients()
     {
         var clients = await _mediator.Send(new GetClientsQuery());
@@ -27,6 +28,7 @@ public class ClientsController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<ActionResult<Client>> GetClient(string id)
     {
         var client = await _mediator.Send(new GetClientByIdQuery(id));

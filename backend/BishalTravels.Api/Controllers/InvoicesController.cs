@@ -19,6 +19,7 @@ public class InvoicesController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<InvoiceResponseDto>>> GetInvoices(
         [FromQuery] string? status, 
         [FromQuery] string? month, 
@@ -29,6 +30,7 @@ public class InvoicesController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<ActionResult<InvoiceResponseDto>> GetInvoice(string id)
     {
         var invoice = await _mediator.Send(new GetInvoiceByIdQuery(id));

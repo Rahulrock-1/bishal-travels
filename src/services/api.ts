@@ -20,7 +20,7 @@ export const api = {
 
   // Health check
   async checkHealth(): Promise<{ status: string; service: string; database: string }> {
-    const healthUrl = API_BASE_URL.replace(/\/api$/, '') + '/health';
+    const healthUrl = `${API_BASE_URL}/health`;
     const res = await fetch(healthUrl);
     if (!res.ok) throw new Error('Health check failed');
     return res.json();
