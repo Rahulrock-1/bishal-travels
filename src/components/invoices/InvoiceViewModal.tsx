@@ -578,7 +578,7 @@ export const InvoiceViewModal: React.FC = () => {
               company={company}
               vehicle={primaryVehicle}
               monthTitle={invoice.billingMonth || 'JULY 2026'}
-              invoiceDateStr={formatDate(invoice.invoiceDate, 'dd-MM-yyyy')}
+              invoiceDateStr={formatDate(invoice.invoiceDate || new Date(), 'dd-MM-yyyy')}
               rows={bishalReportData.rows}
               totalHours={bishalReportData.totalHours}
               totalKm={bishalReportData.totalKm}

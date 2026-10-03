@@ -32,7 +32,7 @@ export interface BishalMonthlyInvoicePdfTemplateProps {
   company: CompanyProfile;
   vehicle: Vehicle;
   monthTitle: string;    // e.g. "JULY 2026" or "AUGUST 2026"
-  invoiceDateStr: string;// e.g. "31-07-2026"
+  invoiceDateStr?: string;// Dynamic print date e.g. "03-10-2026"
   rows: DailyReportRow[];
   totalHours: number;
   totalKm: number;
@@ -66,7 +66,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
   company,
   vehicle,
   monthTitle = 'JULY 2026',
-  invoiceDateStr = '31-07-2026',
+  invoiceDateStr,
   rows = [],
   totalHours = 0,
   totalKm = 0,
@@ -184,7 +184,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
               PAN NO - {company.pan || 'BQNPP4333F'}
             </div>
             <div>
-              DATE - {invoiceDateStr}
+              DATE - {invoiceDateStr || formatDate(new Date(), 'dd-MM-yyyy')}
             </div>
           </div>
         </div>

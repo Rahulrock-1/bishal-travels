@@ -139,6 +139,15 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const [showStartEndKmInPdf, setShowStartEndKmInPdf] = useState<boolean>(false);
   const [showStartEndTimeInPdf, setShowStartEndTimeInPdf] = useState<boolean>(false);
   const [showGarageColsInPdf, setShowGarageColsInPdf] = useState<boolean>(false);
+
+  // Dynamic Print / Invoice Date for PDF Banking & Header Details (Defaults to current date)
+  const [printDate, setPrintDate] = useState<string>(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  });
   
   // Slab / Tiered KM Billing State (e.g. 2,000 KM @ ₹19/KM, excess KM @ ₹12/KM)
   const [isTieredKmEnabled, setIsTieredKmEnabled] = useState<boolean>(false);
@@ -1516,6 +1525,21 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               <Download className="w-4 h-4" />
               <span>{isDownloadingPdf ? 'Generating PDF...' : 'Download PDF Report'}</span>
             </button>
+
+            {/* Dynamic Print Date Input (Defaults to current printing date) */}
+            <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
+              <Calendar className="w-4 h-4 text-amber-400 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-[9px] uppercase font-bold text-slate-400 leading-none">Print Date</span>
+                <input
+                  type="date"
+                  value={printDate}
+                  onChange={e => setPrintDate(e.target.value)}
+                  className="bg-transparent text-amber-300 font-mono font-bold text-xs outline-none cursor-pointer p-0"
+                  title="Dynamic print date printed on the official PDF header and banking section"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2881,6 +2905,19 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Print Date in Modal Header */}
+                <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2.5 py-1.5 rounded-lg">
+                  <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-slate-400 text-[11px] font-bold">Print Date:</span>
+                  <input
+                    type="date"
+                    value={printDate}
+                    onChange={e => setPrintDate(e.target.value)}
+                    className="bg-transparent text-amber-300 font-mono font-bold text-xs outline-none cursor-pointer"
+                    title="Change print/invoice date stamped in the PDF header and banking section"
+                  />
+                </div>
+
                 <button
                   onClick={triggerPrint}
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors border border-slate-700"
@@ -3019,7 +3056,7 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                 company={company}
                 vehicle={selectedVeh}
                 monthTitle={selectedMonthName}
-                invoiceDateStr={`31-${String(selectedMonth + 1).padStart(2, '0')}-${selectedYear}`}
+                invoiceDateStr={formatDate(printDate || new Date(), 'dd-MM-yyyy')}
                 rows={rows.map(r => ({
                   date: formatDate(r.dateStr, 'dd-MM-yyyy'),
                   dutySlipNo: r.dutySlipNo,
