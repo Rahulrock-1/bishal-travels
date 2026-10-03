@@ -175,7 +175,9 @@ public record UpsertDutySlipDto(
     decimal FuelCharges,
     decimal OtherExpenses,
     string? Notes,
-    string? Status
+    string? Status,
+    decimal? TotalHours = null,
+    decimal? ExtraHours = null
 );
 
 public record BatchUpsertDutySlipsDto(List<UpsertDutySlipDto> Slips);

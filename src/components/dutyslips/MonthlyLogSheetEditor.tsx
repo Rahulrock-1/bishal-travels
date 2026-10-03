@@ -157,6 +157,11 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
   const [tier2RatePerKm, setTier2RatePerKm] = useState<number>(12);
   const [isSlabConfigOpen, setIsSlabConfigOpen] = useState<boolean>(false);
 
+  // Manual Surcharges for PDF (Parking & Extra Charges)
+  const [manualPdfParkingCharges, setManualPdfParkingCharges] = useState<number | null>(null);
+  const [manualPdfExtraCharges, setManualPdfExtraCharges] = useState<number>(0);
+  const [manualPdfExtraChargesDesc, setManualPdfExtraChargesDesc] = useState<string>('Extra Charges');
+
   const [rows, setRows] = useState<DailyRowData[]>([]);
 
   // Build backend payload for a single daily row
@@ -1410,6 +1415,11 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
     ? calculatedGrandTotal
     : rows.reduce((sum, r) => sum + (Number(r.dayTotalAmount) || 0), 0);
   const totalWorkingDays = rows.filter(r => !r.isOffDay && r.totalKm > 0).length;
+
+  // Effective PDF values (with manual override support)
+  const effectivePdfParking = manualPdfParkingCharges !== null ? manualPdfParkingCharges : totalMonthParking;
+  const effectivePdfExtraCharges = Number(manualPdfExtraCharges) || 0;
+  const effectivePdfGrandTotal = Math.max(0, grandTotalAmount + (effectivePdfParking - totalMonthParking) + effectivePdfExtraCharges);
 
   // Save all rows to AppContext duty slips and backend database in realtime
   const handleSaveAllSlips = async () => {
@@ -3052,6 +3062,78 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
             </div>
           </div>
 
+          {/* Manual Charges & Surcharges for PDF Strip (Parking & Extra Charges) */}
+          <div className="bg-slate-950 border border-emerald-500/40 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-bold text-emerald-400 flex items-center gap-1.5 uppercase text-[11px] tracking-wide">
+                <ParkingSquare className="w-3.5 h-3.5 text-emerald-400" />
+                <span>PDF Manual Charges:</span>
+              </span>
+
+              {/* Total Parking Charges Input */}
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg">
+                <span className="text-slate-400 text-[11px] font-semibold">Total Parking:</span>
+                <span className="text-slate-400 text-xs font-mono">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={effectivePdfParking}
+                  onChange={e => setManualPdfParkingCharges(Math.max(0, Number(e.target.value)))}
+                  className="w-20 px-1.5 py-0.5 bg-slate-800 border border-emerald-500/60 rounded text-emerald-300 font-mono font-bold text-center text-xs outline-none focus:ring-1 focus:ring-emerald-400"
+                  title="Manually set or override total parking charges applied in PDF"
+                  placeholder="0"
+                />
+                {manualPdfParkingCharges !== null && manualPdfParkingCharges !== totalMonthParking && (
+                  <button
+                    type="button"
+                    onClick={() => setManualPdfParkingCharges(null)}
+                    className="text-[10px] text-amber-400 hover:text-amber-300 underline font-semibold ml-0.5 flex items-center gap-0.5"
+                    title={`Reset to auto sum from log entries (₹${totalMonthParking})`}
+                  >
+                    <RotateCcw className="w-2.5 h-2.5" />
+                    <span>Auto (₹{totalMonthParking})</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Extra Charges Input */}
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg">
+                <span className="text-slate-400 text-[11px] font-semibold">Extra Charges:</span>
+                <span className="text-slate-400 text-xs font-mono">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={manualPdfExtraCharges}
+                  onChange={e => setManualPdfExtraCharges(Math.max(0, Number(e.target.value)))}
+                  className="w-20 px-1.5 py-0.5 bg-slate-800 border border-purple-500/60 rounded text-purple-300 font-mono font-bold text-center text-xs outline-none focus:ring-1 focus:ring-purple-400"
+                  title="Manually enter extra charges applied in PDF"
+                  placeholder="0"
+                />
+              </div>
+
+              {/* Extra Charges Description Input */}
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg">
+                <span className="text-slate-400 text-[11px] font-semibold">Description:</span>
+                <input
+                  type="text"
+                  value={manualPdfExtraChargesDesc}
+                  onChange={e => setManualPdfExtraChargesDesc(e.target.value)}
+                  className="w-36 sm:w-44 px-2 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-[11px] outline-none focus:ring-1 focus:ring-purple-400"
+                  placeholder="e.g. Airport Permit / Toll"
+                  title="Description for extra charges shown in PDF"
+                />
+              </div>
+            </div>
+
+            {/* Quick Status Pill */}
+            <div className="flex items-center gap-2">
+              <div className="text-[11px] font-mono text-emerald-300 bg-slate-900/90 px-2.5 py-1 rounded-lg border border-slate-800">
+                <span className="text-slate-400">Net Payable: </span>
+                <strong className="text-white font-bold">₹ {effectivePdfGrandTotal.toLocaleString('en-IN')}</strong>
+              </div>
+            </div>
+          </div>
+
           {/* Render Container for high-quality capture */}
           <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-100 p-4 md:p-6 shadow-inner flex justify-center">
             {selectedVeh && (
@@ -3089,10 +3171,13 @@ export const MonthlyLogSheetEditor: React.FC<{ onClose?: () => void }> = ({ onCl
                 totalGarageKm={totalMonthGarageKm}
                 totalExtraDutyCharges={totalMonthExtraDutyCharges}
                 totalNight={totalMonthNight}
-                totalParking={totalMonthParking}
+                totalParking={effectivePdfParking}
+                manualParkingCharges={effectivePdfParking}
                 totalToll={totalMonthToll}
                 totalBatta={totalMonthBatta}
-                grandTotalAmount={grandTotalAmount}
+                extraCharges={effectivePdfExtraCharges}
+                extraChargesDescription={manualPdfExtraChargesDesc}
+                grandTotalAmount={effectivePdfGrandTotal}
                 client={selectedCli}
                 elementId="bishal-sheet-preview-render-modal"
                 hideOffDays={true}

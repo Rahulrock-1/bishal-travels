@@ -161,7 +161,7 @@ export const InvoicePrintTemplate: React.FC<InvoicePrintTemplateProps> = ({
           <tbody className="divide-y divide-slate-200 font-medium text-slate-800">
             {invoice.items.map((item, index) => {
               const extraCharges = (item.extraKmCharges || 0) + (item.extraHourCharges || 0);
-              const otherTripCharges = (item.nightCharges || 0) + (item.parkingCharges || 0) + (item.tollCharges || 0) + (item.driverAllowance || 0);
+              const otherTripCharges = (item.nightCharges || 0) + (item.parkingCharges || 0) + (item.tollCharges || 0) + (item.driverAllowance || 0) + (item.otherCharges || 0);
 
               return (
                 <tr key={item.id || index} className="align-top">
@@ -202,6 +202,9 @@ export const InvoicePrintTemplate: React.FC<InvoicePrintTemplateProps> = ({
                     )}
                     {item.driverAllowance > 0 && (
                       <div className="text-purple-800">Batta: ₹{item.driverAllowance}</div>
+                    )}
+                    {item.otherCharges > 0 && (
+                      <div className="text-indigo-800 font-semibold">Extra: ₹{item.otherCharges}</div>
                     )}
                     {otherTripCharges === 0 && <span className="text-slate-400">-</span>}
                   </td>

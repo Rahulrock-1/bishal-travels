@@ -231,8 +231,8 @@ public class DutySlipService : IDutySlipService
             existing.GarageKm = dto.GarageKm;
             existing.StartTime = dto.StartTime;
             existing.EndTime = dto.EndTime;
-            existing.TotalHours = totalHours;
-            existing.ExtraHours = extraHours;
+            existing.TotalHours = dto.TotalHours ?? totalHours;
+            existing.ExtraHours = dto.ExtraHours ?? extraHours;
             existing.ExtraDuty = dto.ExtraDuty;
             existing.ExtraDutyCharges = dto.ExtraDutyCharges;
             existing.NightCharges = dto.NightCharges;
@@ -282,8 +282,8 @@ public class DutySlipService : IDutySlipService
                 GarageKm = dto.GarageKm,
                 StartTime = dto.StartTime,
                 EndTime = dto.EndTime,
-                TotalHours = totalHours,
-                ExtraHours = extraHours,
+                TotalHours = dto.TotalHours ?? totalHours,
+                ExtraHours = dto.ExtraHours ?? extraHours,
                 ExtraDuty = dto.ExtraDuty,
                 ExtraDutyCharges = dto.ExtraDutyCharges,
                 NightCharges = dto.NightCharges,

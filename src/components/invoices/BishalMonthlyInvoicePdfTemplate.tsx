@@ -60,6 +60,9 @@ export interface BishalMonthlyInvoicePdfTemplateProps {
   overtimeRatePerHour?: number;
   garageRatePerKm?: number;
   tieredKmConfig?: TieredKmConfig; // Dynamic Tiered / Slab KM Billing (e.g. First 2000 KM @ ₹19, Rest @ ₹12)
+  extraCharges?: number; // Manually added extra charges in ₹
+  extraChargesDescription?: string; // Optional description for extra charges (e.g. "Airport Permit / Toll / Extra Charges")
+  manualParkingCharges?: number; // Manually specified total parking charges in ₹
 }
 
 export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTemplateProps> = ({
@@ -94,6 +97,9 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
   overtimeRatePerHour = vehicle.ratePerHour || 90,
   garageRatePerKm = vehicle.garageRatePerKm || vehicle.ratePerKm || 18,
   tieredKmConfig,
+  extraCharges = 0,
+  extraChargesDescription = 'Extra Charges',
+  manualParkingCharges,
 }) => {
   // Filter out Day Off / Garage Maintenance rows so they do not show in the report
   const visibleRows = hideOffDays
@@ -118,8 +124,14 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
   const overtimeAmount = totalOvertimeHours * overtimeRatePerHour;
   const isGarageActive = showGarageInOut || (totalGarageKm !== undefined && totalGarageKm > 0);
   const garageAmount = isGarageActive ? (totalGarageKm * garageRatePerKm) : 0;
-  const totalParkingAndToll = totalParking + totalToll;
-  const fallbackGrandTotal = kmAmount + overtimeAmount + garageAmount + totalNight + totalParkingAndToll + totalBatta + totalExtraDutyCharges;
+  
+  // Calculate effective parking charges (uses manual override if provided)
+  const effectiveParking = manualParkingCharges !== undefined ? manualParkingCharges : totalParking;
+  const effectiveExtraCharges = Number(extraCharges) || 0;
+  const effectiveExtraDutyCharges = Number(totalExtraDutyCharges) || 0;
+  const totalParkingAndToll = effectiveParking + (Number(totalToll) || 0);
+
+  const fallbackGrandTotal = kmAmount + overtimeAmount + garageAmount + totalNight + totalParkingAndToll + totalBatta + effectiveExtraDutyCharges + effectiveExtraCharges;
   const computedGrandTotal = isTieredActive 
     ? fallbackGrandTotal 
     : (grandTotalAmount > 0 ? grandTotalAmount : fallbackGrandTotal);
@@ -396,7 +408,48 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                 );
               })}
 
-              {visibleRows.length === 0 && (
+              {/* Dedicated Extra Charges Row if extra charges added and Extra Duty column is not shown */}
+              {effectiveExtraCharges > 0 && !showExtraDutyCol && (
+                <tr className="h-6 bg-purple-50/70 font-semibold border-t border-black text-purple-950">
+                  <td className="py-0.5 px-1 border-r border-black font-bold text-[10px] text-center">
+                    EXTRA
+                  </td>
+                  {showStartEndTime && (
+                    <>
+                      <td className="py-0.5 px-0.5 border-r border-black text-center font-mono text-[10px]">-</td>
+                      <td className="py-0.5 px-0.5 border-r border-black text-center font-mono text-[10px]">-</td>
+                    </>
+                  )}
+                  <td className="py-0.5 px-1 border-r border-black text-center text-[10.5px]">-</td>
+                  {showOvertimeCol && (
+                    <td className="py-0.5 px-1 border-r border-black text-center text-[10.5px]">-</td>
+                  )}
+                  {showGarageCols && (
+                    <>
+                      <td className="py-0.5 px-1 border-r border-black text-center text-[10px]">-</td>
+                      <td className="py-0.5 px-1 border-r border-black text-center text-[10px]">-</td>
+                    </>
+                  )}
+                  {showStartEndKm && (
+                    <>
+                      <td className="py-0.5 px-1 border-r border-black text-center text-[10px]">-</td>
+                      <td className="py-0.5 px-1 border-r border-black text-center text-[10px]">-</td>
+                    </>
+                  )}
+                  <td className="py-0.5 px-1 border-r border-black text-[10px] font-bold text-center uppercase tracking-tight">
+                    {extraChargesDescription || 'EXTRA CHARGES'}
+                  </td>
+                  <td className="py-0.5 px-1 border-r border-black text-center text-[10.5px]">-</td>
+                  <td className="py-0.5 px-1 border-r border-black text-center text-[10.5px]">-</td>
+                  {!hideTotalPrice && (
+                    <td className="py-0.5 px-1 text-[10.5px] font-bold text-purple-950">
+                      ₹ {effectiveExtraCharges.toLocaleString('en-IN')}
+                    </td>
+                  )}
+                </tr>
+              )}
+
+              {visibleRows.length === 0 && effectiveExtraCharges === 0 && (
                 <tr>
                   <td
                     colSpan={
@@ -442,7 +495,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
 
                 {showExtraDutyCol && (
                   <td className="py-2 px-1 border-r border-black font-mono font-bold text-right text-[10px]">
-                    {totalExtraDutyCharges > 0 ? `₹ ${totalExtraDutyCharges}` : '-'}
+                    {effectiveExtraDutyCharges + effectiveExtraCharges > 0 ? `₹ ${effectiveExtraDutyCharges + effectiveExtraCharges}` : '-'}
                   </td>
                 )}
 
@@ -484,8 +537,8 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
           </table>
         </div>
 
-        {/* AT THE END: CALCULATION BREAK-UP BOX (Rendered in New Structure formats OR whenever Garage calculation or Tiered Slab is active) */}
-        {(pdfFormat !== 'bishal-official' || (isGarageActive && totalGarageKm > 0) || isTieredActive) && (
+        {/* AT THE END: CALCULATION BREAK-UP BOX (Rendered in New Structure formats OR whenever Garage calculation, Tiered Slab, or Extra Charges is active) */}
+        {(pdfFormat !== 'bishal-official' || (isGarageActive && totalGarageKm > 0) || isTieredActive || effectiveExtraCharges > 0) && (
           <div className="border-t-2 border-black p-3 bg-slate-50/90">
             <div className="text-[11px] font-bold uppercase tracking-wider text-black border-b border-black pb-1 mb-2 flex items-center justify-between">
               <span>BILLING CALCULATION BREAK-UP & FINAL SUMMARY</span>
@@ -554,10 +607,17 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                   </div>
                 )}
 
-                {totalExtraDutyCharges > 0 && (
+                {effectiveExtraDutyCharges > 0 && (
                   <div className="flex justify-between items-center">
                     <span>Extra Duty Charges:</span>
-                    <span className="font-mono font-semibold text-purple-900">₹ {totalExtraDutyCharges.toLocaleString('en-IN')}</span>
+                    <span className="font-mono font-semibold text-purple-900">₹ {effectiveExtraDutyCharges.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+
+                {effectiveExtraCharges > 0 && (
+                  <div className="flex justify-between items-center bg-purple-50/80 px-1.5 py-0.5 rounded border border-purple-200">
+                    <span className="font-semibold text-purple-950">{extraChargesDescription || 'Extra / Additional Charges'}:</span>
+                    <span className="font-mono font-bold text-purple-900">₹ {effectiveExtraCharges.toLocaleString('en-IN')}</span>
                   </div>
                 )}
 

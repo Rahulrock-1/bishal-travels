@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Download, 
   Printer, 
@@ -7,12 +7,15 @@ import {
   Clock, 
   AlertCircle, 
   Share2, 
-  FileText,
-  FileCheck,
-  Building,
-  CreditCard,
-  Layers,
-  Sparkles
+  FileText, 
+  FileCheck, 
+  Building, 
+  CreditCard, 
+  Layers, 
+  Sparkles,
+  ParkingSquare,
+  Save,
+  RotateCcw
 } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { useApp } from '../../context/AppContext';
@@ -21,8 +24,8 @@ import { InvoicePrintTemplate } from './InvoicePrintTemplate';
 import { DutyAnnexurePrintTemplate } from './DutyAnnexurePrintTemplate';
 import { BishalMonthlyInvoicePdfTemplate, DailyReportRow } from './BishalMonthlyInvoicePdfTemplate';
 import { downloadInvoiceAsPdf, triggerPrint } from '../../utils/pdfGenerator';
-import { formatDate } from '../../utils/formatters';
-import { computeGarageKm, ceilHours } from '../../utils/calculations';
+import { formatDate, numberToWordsIndian } from '../../utils/formatters';
+import { computeGarageKm, ceilHours, calculateInvoiceTotals, calculateInvoiceItemAmount } from '../../utils/calculations';
 
 export const InvoiceViewModal: React.FC = () => {
   const { 
@@ -31,11 +34,13 @@ export const InvoiceViewModal: React.FC = () => {
     dutySlips, 
     selectedInvoiceForView, 
     setSelectedInvoiceForView,
+    updateInvoice,
     updateInvoiceStatus 
   } = useApp();
 
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [copiedNotification, setCopiedNotification] = useState(false);
+  const [saveSuccessNotification, setSaveSuccessNotification] = useState(false);
   
   // Format Template Choice - Default to previous format 'bishal-official'
   const [templateFormat, setTemplateFormat] = useState<
@@ -55,6 +60,11 @@ export const InvoiceViewModal: React.FC = () => {
   const [tier1KmThreshold, setTier1KmThreshold] = useState(2000);
   const [tier1RatePerKm, setTier1RatePerKm] = useState(19);
   const [tier2RatePerKm, setTier2RatePerKm] = useState(12);
+
+  // Manual Surcharges for PDF (Parking & Extra Charges)
+  const [manualParkingCharges, setManualParkingCharges] = useState<number | null>(null);
+  const [manualExtraCharges, setManualExtraCharges] = useState<number>(0);
+  const [extraChargesDescription, setExtraChargesDescription] = useState<string>('Extra Charges');
 
   if (!selectedInvoiceForView) return null;
 
@@ -245,11 +255,105 @@ export const InvoiceViewModal: React.FC = () => {
 
   const bishalReportData = generateBishalReportRows();
 
+  // Initialize manual charges whenever a new invoice is loaded
+  useEffect(() => {
+    if (selectedInvoiceForView) {
+      if (selectedInvoiceForView.manualParkingCharges !== undefined && selectedInvoiceForView.manualParkingCharges !== null) {
+        setManualParkingCharges(selectedInvoiceForView.manualParkingCharges);
+      } else {
+        setManualParkingCharges(null);
+      }
+      setManualExtraCharges(selectedInvoiceForView.manualExtraCharges ?? (selectedInvoiceForView.items?.[0]?.otherCharges || 0));
+      setExtraChargesDescription(selectedInvoiceForView.manualExtraChargesDescription || 'Extra Charges');
+    }
+  }, [selectedInvoiceForView?.id]);
+
+  // Compute effective parking and extra charges
+  const autoParking = bishalReportData.totalParking;
+  const effectiveParking = manualParkingCharges !== null ? manualParkingCharges : autoParking;
+  const effectiveExtraCharges = Number(manualExtraCharges) || 0;
+  const parkingDiff = effectiveParking - autoParking;
+  const finalGrandTotal = Math.max(0, (bishalReportData.grandTotalAmount || 0) + parkingDiff + effectiveExtraCharges);
+
+  // Memoize effective invoice for Corporate Tax Bill & persistence
+  const effectiveInvoice: Invoice = useMemo(() => {
+    const updatedItems = invoice.items.map((it, idx) => {
+      if (idx === 0) {
+        const updatedItem = {
+          ...it,
+          parkingCharges: effectiveParking,
+          otherCharges: effectiveExtraCharges,
+        };
+        return {
+          ...updatedItem,
+          amount: calculateInvoiceItemAmount(updatedItem),
+        };
+      }
+      return it;
+    });
+
+    const totals = calculateInvoiceTotals({
+      items: updatedItems,
+      taxType: invoice.taxType,
+      isInterstate: invoice.isInterstate,
+      discount: invoice.discount,
+      advanceReceived: invoice.advanceReceived,
+      tdsRate: invoice.tdsRate,
+    });
+
+    return {
+      ...invoice,
+      items: updatedItems,
+      manualParkingCharges: effectiveParking,
+      manualExtraCharges: effectiveExtraCharges,
+      manualExtraChargesDescription: extraChargesDescription,
+      subtotal: totals.subtotal,
+      cgst: totals.cgst,
+      sgst: totals.sgst,
+      igst: totals.igst,
+      grandTotal: totals.grandTotal,
+      netPayable: totals.netPayable,
+      amountInWords: numberToWordsIndian(totals.netPayable),
+    };
+  }, [invoice, effectiveParking, effectiveExtraCharges, extraChargesDescription]);
+
+  const handleSaveManualChargesToInvoice = () => {
+    updateInvoice(invoice.id, {
+      manualParkingCharges: effectiveParking,
+      manualExtraCharges: effectiveExtraCharges,
+      manualExtraChargesDescription: extraChargesDescription,
+      items: effectiveInvoice.items,
+      subtotal: effectiveInvoice.subtotal,
+      grandTotal: effectiveInvoice.grandTotal,
+      netPayable: effectiveInvoice.netPayable,
+      amountInWords: effectiveInvoice.amountInWords,
+    });
+    setSelectedInvoiceForView(effectiveInvoice);
+    setSaveSuccessNotification(true);
+    setTimeout(() => setSaveSuccessNotification(false), 2500);
+  };
+
   const handleDownloadPdf = async () => {
     setIsGeneratingPdf(true);
-    const elementId = templateFormat === 'bishal-official' 
-      ? `bishal-official-pdf-report` 
-      : `invoice-full-render-container`;
+
+    // Automatically sync and persist charges into the invoice
+    if (manualParkingCharges !== null || manualExtraCharges > 0) {
+      updateInvoice(invoice.id, {
+        manualParkingCharges: effectiveParking,
+        manualExtraCharges: effectiveExtraCharges,
+        manualExtraChargesDescription: extraChargesDescription,
+        items: effectiveInvoice.items,
+        subtotal: effectiveInvoice.subtotal,
+        grandTotal: effectiveInvoice.grandTotal,
+        netPayable: effectiveInvoice.netPayable,
+        amountInWords: effectiveInvoice.amountInWords,
+      });
+      setSelectedInvoiceForView(effectiveInvoice);
+    }
+
+    const elementId = templateFormat === 'corporate-tax'
+      ? `invoice-full-render-container`
+      : `bishal-official-pdf-report`;
       
     const filename = `${company.businessName || 'Bishal_Travels'}_${invoice.billingMonth.replace(/\s+/g, '_')}_${invoice.invoiceNumber.replace(/\//g, '-')}`;
     
@@ -447,6 +551,88 @@ export const InvoiceViewModal: React.FC = () => {
             </div>
           )}
 
+          {/* Manual Charges & Surcharges for PDF Strip (Parking & Extra Charges) */}
+          <div className="bg-slate-950 border border-emerald-500/40 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-bold text-emerald-400 flex items-center gap-1.5 uppercase text-[11px] tracking-wide">
+                <ParkingSquare className="w-3.5 h-3.5 text-emerald-400" />
+                <span>PDF Manual Charges:</span>
+              </span>
+
+              {/* Total Parking Charges Input */}
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg">
+                <span className="text-slate-400 text-[11px] font-semibold">Total Parking:</span>
+                <span className="text-slate-400 text-xs font-mono">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={effectiveParking}
+                  onChange={e => setManualParkingCharges(Math.max(0, Number(e.target.value)))}
+                  className="w-20 px-1.5 py-0.5 bg-slate-800 border border-emerald-500/60 rounded text-emerald-300 font-mono font-bold text-center text-xs outline-none focus:ring-1 focus:ring-emerald-400"
+                  title="Manually set or override total parking charges applied in PDF"
+                  placeholder="0"
+                />
+                {manualParkingCharges !== null && manualParkingCharges !== autoParking && (
+                  <button
+                    type="button"
+                    onClick={() => setManualParkingCharges(null)}
+                    className="text-[10px] text-amber-400 hover:text-amber-300 underline font-semibold ml-0.5 flex items-center gap-0.5"
+                    title={`Reset to auto sum from duty slips (₹${autoParking})`}
+                  >
+                    <RotateCcw className="w-2.5 h-2.5" />
+                    <span>Auto (₹{autoParking})</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Extra Charges Input */}
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg">
+                <span className="text-slate-400 text-[11px] font-semibold">Extra Charges:</span>
+                <span className="text-slate-400 text-xs font-mono">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={manualExtraCharges}
+                  onChange={e => setManualExtraCharges(Math.max(0, Number(e.target.value)))}
+                  className="w-20 px-1.5 py-0.5 bg-slate-800 border border-purple-500/60 rounded text-purple-300 font-mono font-bold text-center text-xs outline-none focus:ring-1 focus:ring-purple-400"
+                  title="Manually enter extra charges applied in PDF"
+                  placeholder="0"
+                />
+              </div>
+
+              {/* Extra Charges Description Input */}
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg">
+                <span className="text-slate-400 text-[11px] font-semibold">Description:</span>
+                <input
+                  type="text"
+                  value={extraChargesDescription}
+                  onChange={e => setExtraChargesDescription(e.target.value)}
+                  className="w-36 sm:w-44 px-2 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-[11px] outline-none focus:ring-1 focus:ring-purple-400"
+                  placeholder="e.g. Airport Permit / Toll"
+                  title="Description for extra charges shown in PDF"
+                />
+              </div>
+            </div>
+
+            {/* Quick Status & Save Pill */}
+            <div className="flex items-center gap-2">
+              <div className="text-[11px] font-mono text-emerald-300 bg-slate-900/90 px-2.5 py-1 rounded-lg border border-slate-800">
+                <span className="text-slate-400">Net Payable: </span>
+                <strong className="text-white font-bold">₹ {finalGrandTotal.toLocaleString('en-IN')}</strong>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveManualChargesToInvoice}
+                className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 transition-all shadow-sm"
+                title="Save manual parking and extra charges into this invoice in the database"
+              >
+                <Save className="w-3 h-3" />
+                <span>{saveSuccessNotification ? 'Saved!' : 'Save'}</span>
+              </button>
+            </div>
+          </div>
+
           {/* Column Toggles & Action Buttons Row */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             {templateFormat !== 'corporate-tax' ? (
@@ -585,11 +771,14 @@ export const InvoiceViewModal: React.FC = () => {
               totalOvertimeHours={bishalReportData.totalOvertimeHours}
               totalGarageKm={bishalReportData.totalGarageKm}
               totalNight={bishalReportData.totalNight}
-              totalParking={bishalReportData.totalParking}
+              totalParking={effectiveParking}
+              manualParkingCharges={effectiveParking}
               totalToll={bishalReportData.totalToll}
               totalBatta={bishalReportData.totalBatta}
               totalExtraDutyCharges={bishalReportData.totalExtraDutyCharges}
-              grandTotalAmount={bishalReportData.grandTotalAmount}
+              extraCharges={effectiveExtraCharges}
+              extraChargesDescription={extraChargesDescription}
+              grandTotalAmount={finalGrandTotal}
               client={invoice.clientSnapshot}
               elementId="bishal-official-pdf-report"
               showStartEndKm={showStartEndKm}
@@ -616,9 +805,9 @@ export const InvoiceViewModal: React.FC = () => {
           {/* FORMAT 5: CORPORATE TAX INVOICE */}
           {templateFormat === 'corporate-tax' && (
             <div id="invoice-full-render-container" className="space-y-6 w-full max-w-[800px]">
-              <InvoicePrintTemplate invoice={invoice} company={company} />
+              <InvoicePrintTemplate invoice={effectiveInvoice} company={company} />
               <DutyAnnexurePrintTemplate
-                invoice={invoice}
+                invoice={effectiveInvoice}
                 company={company}
                 dutySlips={dutySlips}
                 vehicles={vehicles}

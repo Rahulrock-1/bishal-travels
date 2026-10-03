@@ -166,6 +166,9 @@ export interface Invoice {
   companyEmail: string;
   companyAddress: string;
   status: InvoiceStatus;
+  manualParkingCharges?: number;
+  manualExtraCharges?: number;
+  manualExtraChargesDescription?: string;
   notes: string;
   terms: string[];
   createdAt: string;
