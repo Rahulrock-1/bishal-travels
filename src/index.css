@@ -11,17 +11,23 @@
 
 /* Print specific styles */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 4mm;
+  }
+
   /* Hide standard web UI on print */
   nav, sidebar, header, .no-print, button, .actions-bar {
     display: none !important;
   }
 
-  body {
+  html, body {
     background-color: #ffffff !important;
     color: #000000 !important;
     font-size: 11pt !important;
     margin: 0 !important;
     padding: 0 !important;
+    height: auto !important;
   }
 
   .print-only {

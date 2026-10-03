@@ -136,15 +136,24 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
     ? fallbackGrandTotal 
     : (grandTotalAmount > 0 ? grandTotalAmount : fallbackGrandTotal);
 
+  // Dynamic density calculation so 1 to 31 rows fit perfectly onto ONE single A4 page
+  const isHighDensity = visibleRows.length > 20;
+  const isUltraDensity = visibleRows.length > 26;
+  const rowHeightClass = isUltraDensity ? 'h-5' : (isHighDensity ? 'h-5.5' : 'h-6');
+  const cellPadClass = isUltraDensity ? 'py-0 px-1 text-[9.5px]' : (isHighDensity ? 'py-0.5 px-1 text-[10px]' : 'py-0.5 px-1 text-[10.5px]');
+  const cellFontClass = isUltraDensity ? 'text-[9.5px]' : (isHighDensity ? 'text-[10px]' : 'text-[10.5px]');
+
   return (
     <div
       id={elementId}
-      className="bg-white text-black font-sans mx-auto p-4 sm:p-6 shadow-sm border border-slate-300 print:border-none print:shadow-none print:p-0 print:m-0 shrink-0"
+      className={`bg-white text-black font-sans mx-auto shadow-sm border border-slate-300 print:border-none print:shadow-none print:p-0 print:m-0 shrink-0 ${
+        isUltraDensity ? 'p-2' : (isHighDensity ? 'p-2.5' : 'p-3 sm:p-4')
+      }`}
       style={{
         width: '794px',
         minWidth: '794px',
         maxWidth: '794px',
-        minHeight: '1120px',
+        minHeight: '1050px',
         backgroundColor: '#ffffff',
         color: '#000000',
         fontFamily: '"Times New Roman", Times, Georgia, serif',
@@ -154,7 +163,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
       {/* Outer Enclosing Box matching JULU BISHAL.pdf */}
       <div className="border-2 border-black">
         {/* Top Header: MONTHLY INVOICE & MONTH */}
-        <div className="text-center py-2.5 border-b border-black">
+        <div className={`text-center border-b border-black ${isUltraDensity ? 'py-1.5' : (isHighDensity ? 'py-2' : 'py-2.5')}`}>
           <div className="text-sm font-bold tracking-wider uppercase">
             MONTHLY INVOICE
           </div>
@@ -166,7 +175,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
         {/* 3-Column Header Section */}
         <div className="grid grid-cols-12 border-b border-black text-xs">
           {/* Left Box: TRADE LICENCE, VENDOR ID & VEHICLE NO */}
-          <div className="col-span-3 p-3 border-r border-black flex flex-col justify-center space-y-0.5 text-[11px] font-bold">
+          <div className={`col-span-3 border-r border-black flex flex-col justify-center space-y-0.5 text-[11px] font-bold ${isUltraDensity ? 'p-2' : 'p-2.5'}`}>
             <div>TRADE LICENCE - {company.tradeLicenseNo || '1711'}</div>
             {company.vendorId && (
               <div>VENDOR ID - {company.vendorId}</div>
@@ -175,14 +184,14 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
           </div>
 
           {/* Center Box: BISHAL TRAVELS (Large Title) */}
-          <div className="col-span-5 p-3 border-r border-black flex items-center justify-center text-center">
+          <div className={`col-span-5 border-r border-black flex items-center justify-center text-center ${isUltraDensity ? 'p-2' : 'p-2.5'}`}>
             <h1 className="text-2xl sm:text-3xl font-normal tracking-wide text-black uppercase font-serif">
               {company.businessName || 'BISHAL TRAVELS'}
             </h1>
           </div>
 
           {/* Right Box: BANK DETAILS & DATE */}
-          <div className="col-span-4 p-3 flex flex-col justify-center space-y-0.5 text-[10px] sm:text-[11px] font-bold leading-tight">
+          <div className={`col-span-4 flex flex-col justify-center space-y-0.5 text-[10px] sm:text-[11px] font-bold leading-tight ${isUltraDensity ? 'p-2' : 'p-2.5'}`}>
             <div>
               {company.bankName || 'STATE BANK OF INDIA'}
             </div>
@@ -203,17 +212,17 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
 
         {/* Address & Contact Bar */}
         <div className="grid grid-cols-12 border-b border-black text-[10px] sm:text-[10.5px] font-bold">
-          <div className="col-span-9 p-2 border-r border-black text-center sm:text-left leading-snug">
+          <div className={`col-span-9 border-r border-black text-center sm:text-left leading-snug ${isUltraDensity ? 'p-1.5' : 'p-2'}`}>
             {company.address || 'VILL - KALMIKHALI, P.O - ANDHARMANIK, P.S - BISHNUPUR, DIST - SOUTH 24 PARGANAS, PIN - 743503, STATE - WEST BENGAL'}
           </div>
-          <div className="col-span-3 p-2 flex items-center justify-center text-center font-bold">
+          <div className={`col-span-3 flex items-center justify-center text-center font-bold ${isUltraDensity ? 'p-1.5' : 'p-2'}`}>
             CONTACT NO - {company.phone || '9088933712'}
           </div>
         </div>
 
         {/* Client & Rate Contract Info Bar (Shows in Dual Mode, Annexure or New Structure - hidden in previous bishal-official format) */}
         {pdfFormat !== 'bishal-official' && (client || pdfFormat === 'dual-km-overtime' || pdfFormat === 'corporate-duty-annexure') && (
-          <div className="border-b border-black px-3 py-1.5 bg-slate-50 text-[10px] flex flex-wrap items-center justify-between gap-2 font-medium">
+          <div className={`border-b border-black bg-slate-50 text-[10px] flex flex-wrap items-center justify-between gap-2 font-medium ${isUltraDensity ? 'px-2 py-1' : 'px-3 py-1.5'}`}>
             <div>
               <span className="font-bold uppercase text-slate-800">Billed To: </span>
               <strong>{client?.companyName || client?.name || 'Corporate Client'}</strong>
@@ -239,8 +248,8 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
         <div className="w-full overflow-hidden">
           <table className="w-full text-center border-collapse text-[10.5px]">
             <thead>
-              <tr className="border-b border-black font-bold uppercase text-[10px] bg-slate-100/60">
-                <th className="py-2 px-1 border-r border-black w-20">DATE</th>
+              <tr className={`border-b border-black font-bold uppercase text-[10px] bg-slate-100/60 ${isUltraDensity ? 'py-1' : 'py-1.5'}`}>
+                <th className={`border-r border-black w-20 ${isUltraDensity ? 'py-1 px-1' : 'py-1.5 px-1'}`}>DATE</th>
 
                 {/* Optional Start Time & End Time Columns */}
                 {showStartEndTime && (
@@ -322,39 +331,39 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                   : '-';
 
                 return (
-                  <tr key={index} className="h-6 hover:bg-slate-50 transition-colors">
+                  <tr key={index} className={`${rowHeightClass} hover:bg-slate-50 transition-colors`}>
                     {/* Date Column */}
-                    <td className="py-0.5 px-1 border-r border-black font-medium text-[10.5px]">
+                    <td className={`border-r border-black font-medium ${cellPadClass}`}>
                       {row.date}
                     </td>
 
                     {/* Optional Start Time & End Time Columns */}
                     {showStartEndTime && (
                       <>
-                        <td className="py-0.5 px-0.5 border-r border-black font-mono text-[10px]">
+                        <td className={`border-r border-black font-mono ${isUltraDensity ? 'py-0 px-0.5 text-[9px]' : 'py-0.5 px-0.5 text-[10px]'}`}>
                           {row.startTime || '-'}
                         </td>
-                        <td className="py-0.5 px-0.5 border-r border-black font-mono text-[10px]">
+                        <td className={`border-r border-black font-mono ${isUltraDensity ? 'py-0 px-0.5 text-[9px]' : 'py-0.5 px-0.5 text-[10px]'}`}>
                           {row.endTime || '-'}
                         </td>
                       </>
                     )}
 
                     {/* Hours Column */}
-                    <td className="py-0.5 px-1 border-r border-black text-[10.5px]">
+                    <td className={`border-r border-black ${cellPadClass}`}>
                       {hasHours ? `${row.hours} HOURS` : ''}
                     </td>
 
                     {/* Separated Overtime Column */}
                     {showOvertimeCol && (
-                      <td className="py-0.5 px-1 border-r border-black font-mono text-[10.5px] font-bold text-amber-900 bg-amber-50/30">
+                      <td className={`border-r border-black font-mono font-bold text-amber-900 bg-amber-50/30 ${cellPadClass}`}>
                         {hasOt ? `${row.extraHours}h OT` : '-'}
                       </td>
                     )}
 
                     {/* Separated Extra Duty Charges Column */}
                     {showExtraDutyCol && (
-                      <td className="py-0.5 px-1 border-r border-black text-right font-mono text-[10.5px]">
+                      <td className={`border-r border-black text-right font-mono ${cellPadClass}`}>
                         {Number(row.extraDutyCharges) > 0 ? `₹ ${Number(row.extraDutyCharges)}` : '-'}
                       </td>
                     )}
@@ -362,10 +371,10 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                     {/* Separated Garage Out & Garage In KM Columns (Only when showGarageCols is true) */}
                     {showGarageCols && (
                       <>
-                        <td className="py-0.5 px-1 border-r border-black font-mono text-[10px]">
+                        <td className={`border-r border-black font-mono ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>
                           {garageOutDisplay}
                         </td>
-                        <td className="py-0.5 px-1 border-r border-black font-mono text-[10px]">
+                        <td className={`border-r border-black font-mono ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>
                           {garageInDisplay}
                         </td>
                       </>
@@ -374,33 +383,33 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                     {/* Optional Start KM & End KM Columns */}
                     {showStartEndKm && (
                       <>
-                        <td className="py-0.5 px-1 border-r border-black font-mono text-[10px]">
+                        <td className={`border-r border-black font-mono ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>
                           {startKmDisplay}
                         </td>
-                        <td className="py-0.5 px-1 border-r border-black font-mono text-[10px]">
+                        <td className={`border-r border-black font-mono ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>
                           {endKmDisplay}
                         </td>
                       </>
                     )}
 
                     {/* Total KM Column */}
-                    <td className="py-0.5 px-1 border-r border-black text-[10.5px] font-bold">
+                    <td className={`border-r border-black font-bold ${cellPadClass}`}>
                       {hasKm ? `${row.km} KM` : ''}
                     </td>
 
                     {/* Night Charge Column */}
-                    <td className="py-0.5 px-1 border-r border-black text-[10.5px]">
+                    <td className={`border-r border-black ${cellPadClass}`}>
                       {nightAmt > 0 ? `₹ ${nightAmt}` : ''}
                     </td>
 
                     {/* Parking Charge Column */}
-                    <td className="py-0.5 px-1 border-r border-black text-[10.5px]">
+                    <td className={`border-r border-black ${cellPadClass}`}>
                       {parkingAmt > 0 ? `₹ ${parkingAmt}` : ''}
                     </td>
 
                     {/* Total Amount Column (Conditionally rendered) */}
                     {!hideTotalPrice && (
-                      <td className="py-0.5 px-1 text-[10.5px] font-semibold">
+                      <td className={`font-semibold ${cellPadClass}`}>
                         {row.totalAmount > 0 ? `₹ ${row.totalAmount.toLocaleString('en-IN')}` : ''}
                       </td>
                     )}
@@ -410,39 +419,39 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
 
               {/* Dedicated Extra Charges Row if extra charges added and Extra Duty column is not shown */}
               {effectiveExtraCharges > 0 && !showExtraDutyCol && (
-                <tr className="h-6 bg-purple-50/70 font-semibold border-t border-black text-purple-950">
-                  <td className="py-0.5 px-1 border-r border-black font-bold text-[10px] text-center">
+                <tr className={`${rowHeightClass} bg-purple-50/70 font-semibold border-t border-black text-purple-950`}>
+                  <td className={`border-r border-black font-bold text-center ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>
                     EXTRA
                   </td>
                   {showStartEndTime && (
                     <>
-                      <td className="py-0.5 px-0.5 border-r border-black text-center font-mono text-[10px]">-</td>
-                      <td className="py-0.5 px-0.5 border-r border-black text-center font-mono text-[10px]">-</td>
+                      <td className={`border-r border-black text-center font-mono ${isUltraDensity ? 'py-0 px-0.5 text-[9px]' : 'py-0.5 px-0.5 text-[10px]'}`}>-</td>
+                      <td className={`border-r border-black text-center font-mono ${isUltraDensity ? 'py-0 px-0.5 text-[9px]' : 'py-0.5 px-0.5 text-[10px]'}`}>-</td>
                     </>
                   )}
-                  <td className="py-0.5 px-1 border-r border-black text-center text-[10.5px]">-</td>
+                  <td className={`border-r border-black text-center ${cellPadClass}`}>-</td>
                   {showOvertimeCol && (
-                    <td className="py-0.5 px-1 border-r border-black text-center text-[10.5px]">-</td>
+                    <td className={`border-r border-black text-center ${cellPadClass}`}>-</td>
                   )}
                   {showGarageCols && (
                     <>
-                      <td className="py-0.5 px-1 border-r border-black text-center text-[10px]">-</td>
-                      <td className="py-0.5 px-1 border-r border-black text-center text-[10px]">-</td>
+                      <td className={`border-r border-black text-center font-mono ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>-</td>
+                      <td className={`border-r border-black text-center font-mono ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>-</td>
                     </>
                   )}
                   {showStartEndKm && (
                     <>
-                      <td className="py-0.5 px-1 border-r border-black text-center text-[10px]">-</td>
-                      <td className="py-0.5 px-1 border-r border-black text-center text-[10px]">-</td>
+                      <td className={`border-r border-black text-center font-mono ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>-</td>
+                      <td className={`border-r border-black text-center font-mono ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>-</td>
                     </>
                   )}
-                  <td className="py-0.5 px-1 border-r border-black text-[10px] font-bold text-center uppercase tracking-tight">
+                  <td className={`border-r border-black font-bold text-center uppercase tracking-tight ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>
                     {extraChargesDescription || 'EXTRA CHARGES'}
                   </td>
-                  <td className="py-0.5 px-1 border-r border-black text-center text-[10.5px]">-</td>
-                  <td className="py-0.5 px-1 border-r border-black text-center text-[10.5px]">-</td>
+                  <td className={`border-r border-black text-center ${cellPadClass}`}>-</td>
+                  <td className={`border-r border-black text-center ${cellPadClass}`}>-</td>
                   {!hideTotalPrice && (
-                    <td className="py-0.5 px-1 text-[10.5px] font-bold text-purple-950">
+                    <td className={`font-bold text-purple-950 ${cellPadClass}`}>
                       ₹ {effectiveExtraCharges.toLocaleString('en-IN')}
                     </td>
                   )}
@@ -471,38 +480,38 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
 
             {/* Bottom Total Row */}
             <tfoot>
-              <tr className="border-t-2 border-black font-bold text-[10.5px] uppercase bg-slate-50">
-                <td className="py-2 px-1 border-r border-black font-bold">
+              <tr className={`border-t-2 border-black font-bold uppercase bg-slate-50 ${isUltraDensity ? 'text-[10px]' : 'text-[10.5px]'}`}>
+                <td className={`border-r border-black font-bold ${isUltraDensity ? 'py-1 px-1' : 'py-1.5 px-1'}`}>
                   TOTAL
                 </td>
 
                 {showStartEndTime && (
                   <>
-                    <td className="py-2 px-0.5 border-r border-black text-slate-400 font-normal">-</td>
-                    <td className="py-2 px-0.5 border-r border-black text-slate-400 font-normal">-</td>
+                    <td className={`border-r border-black text-slate-400 font-normal ${isUltraDensity ? 'py-1 px-0.5' : 'py-1.5 px-0.5'}`}>-</td>
+                    <td className={`border-r border-black text-slate-400 font-normal ${isUltraDensity ? 'py-1 px-0.5' : 'py-1.5 px-0.5'}`}>-</td>
                   </>
                 )}
 
-                <td className="py-2 px-1 border-r border-black font-bold">
+                <td className={`border-r border-black font-bold ${isUltraDensity ? 'py-1 px-1' : 'py-1.5 px-1'}`}>
                   {totalHours} HOURS
                 </td>
 
                 {showOvertimeCol && (
-                  <td className="py-2 px-1 border-r border-black font-black text-amber-900 bg-amber-50/70">
+                  <td className={`border-r border-black font-black text-amber-900 bg-amber-50/70 ${isUltraDensity ? 'py-1 px-1' : 'py-1.5 px-1'}`}>
                     {totalOvertimeHours}h OT
                   </td>
                 )}
 
                 {showExtraDutyCol && (
-                  <td className="py-2 px-1 border-r border-black font-mono font-bold text-right text-[10px]">
+                  <td className={`border-r border-black font-mono font-bold text-right ${isUltraDensity ? 'py-1 px-1 text-[9.5px]' : 'py-1.5 px-1 text-[10px]'}`}>
                     {effectiveExtraDutyCharges + effectiveExtraCharges > 0 ? `₹ ${effectiveExtraDutyCharges + effectiveExtraCharges}` : '-'}
                   </td>
                 )}
 
                 {showGarageCols && (
                   <>
-                    <td className="py-2 px-1 border-r border-black font-mono text-[10px]">-</td>
-                    <td className="py-2 px-1 border-r border-black font-mono text-[10px] font-bold">
+                    <td className={`border-r border-black font-mono ${isUltraDensity ? 'py-1 px-1 text-[9.5px]' : 'py-1.5 px-1 text-[10px]'}`}>-</td>
+                    <td className={`border-r border-black font-mono font-bold ${isUltraDensity ? 'py-1 px-1 text-[9.5px]' : 'py-1.5 px-1 text-[10px]'}`}>
                       {totalGarageKm > 0 ? `${totalGarageKm} KM` : '-'}
                     </td>
                   </>
@@ -510,25 +519,25 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
 
                 {showStartEndKm && (
                   <>
-                    <td className="py-2 px-1 border-r border-black text-slate-400 font-normal">-</td>
-                    <td className="py-2 px-1 border-r border-black text-slate-400 font-normal">-</td>
+                    <td className={`border-r border-black text-slate-400 font-normal ${isUltraDensity ? 'py-1 px-1' : 'py-1.5 px-1'}`}>-</td>
+                    <td className={`border-r border-black text-slate-400 font-normal ${isUltraDensity ? 'py-1 px-1' : 'py-1.5 px-1'}`}>-</td>
                   </>
                 )}
 
-                <td className="py-2 px-1 border-r border-black font-bold">
+                <td className={`border-r border-black font-bold ${isUltraDensity ? 'py-1 px-1' : 'py-1.5 px-1'}`}>
                   {totalKm} KM
                 </td>
 
-                <td className="py-2 px-1 border-r border-black font-bold">
+                <td className={`border-r border-black font-bold ${isUltraDensity ? 'py-1 px-1' : 'py-1.5 px-1'}`}>
                   {totalNight > 0 ? `₹ ${totalNight}` : '₹ 0'}
                 </td>
 
-                <td className="py-2 px-1 border-r border-black font-bold">
+                <td className={`border-r border-black font-bold ${isUltraDensity ? 'py-1 px-1' : 'py-1.5 px-1'}`}>
                   {totalParkingAndToll > 0 ? `₹ ${totalParkingAndToll}` : '₹ 0'}
                 </td>
 
                 {!hideTotalPrice && (
-                  <td className="py-2 px-1 font-bold text-xs">
+                  <td className={`font-bold ${isUltraDensity ? 'py-1 px-1 text-[11px]' : 'py-1.5 px-1 text-xs'}`}>
                     ₹ {computedGrandTotal.toLocaleString('en-IN')}
                   </td>
                 )}
@@ -539,24 +548,24 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
 
         {/* AT THE END: CALCULATION BREAK-UP BOX (Rendered in New Structure formats OR whenever Garage calculation, Tiered Slab, or Extra Charges is active) */}
         {(pdfFormat !== 'bishal-official' || (isGarageActive && totalGarageKm > 0) || isTieredActive || effectiveExtraCharges > 0) && (
-          <div className="border-t-2 border-black p-3 bg-slate-50/90">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-black border-b border-black pb-1 mb-2 flex items-center justify-between">
+          <div className={`border-t-2 border-black bg-slate-50/90 ${isUltraDensity ? 'p-2' : 'p-2.5'}`}>
+            <div className={`font-bold uppercase tracking-wider text-black border-b border-black flex items-center justify-between ${isUltraDensity ? 'text-[10px] pb-0.5 mb-1.5' : 'text-[11px] pb-1 mb-2'}`}>
               <span>BILLING CALCULATION BREAK-UP & FINAL SUMMARY</span>
               <span className="text-[9.5px] font-mono lowercase text-slate-600">
                 mode: {isTieredActive ? `slab km (${tieredKmConfig?.baseKmThreshold} km @ ₹${tieredKmConfig?.tier1Rate}, excess @ ₹${tieredKmConfig?.tier2Rate})` : (calcMode === 'both_km_and_overtime' ? 'both km & overtime calculated' : 'standard highest extra')}
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-[10.5px] font-medium leading-relaxed">
+            <div className={`grid grid-cols-2 gap-3 font-medium leading-relaxed ${isUltraDensity ? 'text-[9.5px]' : 'text-[10px]'}`}>
               {/* Left Column: Distance & Time Charges */}
-              <div className="space-y-1.5 border-r border-black/30 pr-3">
+              <div className="space-y-1 border-r border-black/30 pr-2">
                 {isTieredActive ? (
-                  <div className="space-y-1 bg-emerald-50/80 p-2 rounded border border-emerald-300">
+                  <div className="space-y-0.5 bg-emerald-50/80 p-1.5 rounded border border-emerald-300">
                     <div className="flex justify-between items-center text-emerald-950 font-bold">
                       <span>Total KM Run ({totalKm} KM - Tiered Slab Rate):</span>
                       <strong className="font-mono text-emerald-950 text-xs">₹ {tieredKmResult.totalKmAmount.toLocaleString('en-IN')}</strong>
                     </div>
-                    <div className="text-[9.5px] text-slate-700 font-mono space-y-0.5 pl-1.5 border-l-2 border-emerald-500">
+                    <div className="text-[9px] text-slate-700 font-mono space-y-0.5 pl-1.5 border-l-2 border-emerald-500">
                       <div className="flex justify-between">
                         <span>├─ Slab 1 (First {tieredKmResult.tier1Km} KM × ₹{tieredKmResult.tier1Rate}/KM):</span>
                         <span className="font-bold">₹ {tieredKmResult.tier1Amount.toLocaleString('en-IN')}</span>
@@ -589,7 +598,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
               </div>
 
               {/* Right Column: Surcharges & Net Amount */}
-              <div className="space-y-1 pl-1">
+              <div className="space-y-0.5 pl-1">
                 <div className="flex justify-between items-center">
                   <span>Night Halt Charges:</span>
                   <span className="font-mono font-semibold">₹ {totalNight.toLocaleString('en-IN')}</span>
@@ -616,14 +625,14 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
 
                 {effectiveExtraCharges > 0 && (
                   <div className="flex justify-between items-center bg-purple-50/80 px-1.5 py-0.5 rounded border border-purple-200">
-                    <span className="font-semibold text-purple-950">{extraChargesDescription || 'Extra / Additional Charges'}:</span>
+                    <span className="font-semibold text-purple-950">{extraChargesDescription || 'Extra Charges'}:</span>
                     <span className="font-mono font-bold text-purple-900">₹ {effectiveExtraCharges.toLocaleString('en-IN')}</span>
                   </div>
                 )}
 
-                <div className="pt-1 border-t border-black flex justify-between items-center text-xs font-bold text-black">
+                <div className="pt-1 border-t border-black flex justify-between items-center text-[11px] font-bold text-black">
                   <span className="uppercase">Net Bill Payable Amount:</span>
-                  <span className="text-sm font-mono font-black">
+                  <span className="text-xs sm:text-sm font-mono font-black">
                     ₹ {computedGrandTotal.toLocaleString('en-IN')}
                   </span>
                 </div>
@@ -633,13 +642,13 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
         )}
 
         {/* Bottom Signatures Box */}
-        <div className="grid grid-cols-2 border-t-2 border-black p-4 text-[10.5px]">
+        <div className={`grid grid-cols-2 border-t-2 border-black ${isUltraDensity ? 'p-2 text-[9.5px]' : 'p-3 text-[10px]'}`}>
           <div>
             <div className="font-bold text-slate-800">CLIENT VERIFICATION & APPROVAL:</div>
-            <div className="text-[9.5px] text-slate-500 mt-0.5">
-              Verified the vehicle movements and log entries as per contract agreement.
+            <div className="text-[9px] text-slate-500 mt-0.5">
+              Verified vehicle movements & log entries as per agreement.
             </div>
-            <div className="mt-8 pt-1 border-t border-black w-48 text-center text-[10px] font-bold">
+            <div className={`${isUltraDensity ? 'mt-4' : 'mt-5'} pt-1 border-t border-black w-44 text-center text-[9.5px] font-bold`}>
               Authorized Client Signature & Stamp
             </div>
           </div>
@@ -649,10 +658,10 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
               <div className="font-bold text-black uppercase">
                 FOR {company.businessName || 'BISHAL TRAVELS'}
               </div>
-              <div className="text-[9.5px] text-slate-500">Authorized Fleet Transporter</div>
+              <div className="text-[9px] text-slate-500">Authorized Fleet Transporter</div>
             </div>
 
-            <div className="mt-8 pt-1 border-t border-black w-48 text-center text-[10px] font-bold">
+            <div className={`${isUltraDensity ? 'mt-4' : 'mt-5'} pt-1 border-t border-black w-44 text-center text-[9.5px] font-bold`}>
               {company.signatoryName && company.signatoryName !== 'Bishal' ? company.signatoryName : 'Biswajit Pramanik'}
             </div>
           </div>
