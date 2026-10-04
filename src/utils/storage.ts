@@ -33,11 +33,23 @@ export function loadInitialData(): AppStateData {
       loadedCompany.signatoryName = 'Biswajit Pramanik';
     }
 
+    const storedSlips: DutySlip[] = rawDutySlips ? JSON.parse(rawDutySlips) : [];
+    // Ensure newly seeded duty slips (like September 2026 for WB19R4841) are merged into state
+    const slipKeys = new Set(storedSlips.map(s => `${(s.vehicleId || '').toLowerCase()}_${(s.date || '').split('T')[0]}`));
+    const mergedSlips = [...storedSlips];
+    sampleDutySlips.forEach(s => {
+      const key = `${(s.vehicleId || '').toLowerCase()}_${(s.date || '').split('T')[0]}`;
+      if (!slipKeys.has(key)) {
+        mergedSlips.push(s);
+        slipKeys.add(key);
+      }
+    });
+
     return {
       company: loadedCompany,
       vehicles: rawVehicles ? JSON.parse(rawVehicles) : sampleVehicles,
       clients: rawClients ? JSON.parse(rawClients) : sampleClients,
-      dutySlips: rawDutySlips ? JSON.parse(rawDutySlips) : sampleDutySlips,
+      dutySlips: mergedSlips,
       invoices: rawInvoices ? JSON.parse(rawInvoices) : sampleInvoices,
       setupCompleted: rawSetup ? JSON.parse(rawSetup) : true,
     };
