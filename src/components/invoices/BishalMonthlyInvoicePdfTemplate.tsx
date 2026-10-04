@@ -417,48 +417,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
                 );
               })}
 
-              {/* Dedicated Extra Charges Row if extra charges added and Extra Duty column is not shown */}
-              {effectiveExtraCharges > 0 && !showExtraDutyCol && (
-                <tr className={`${rowHeightClass} bg-purple-50/70 font-semibold border-t border-black text-purple-950`}>
-                  <td className={`border-r border-black font-bold text-center ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>
-                    EXTRA
-                  </td>
-                  {showStartEndTime && (
-                    <>
-                      <td className={`border-r border-black text-center font-mono ${isUltraDensity ? 'py-0 px-0.5 text-[9px]' : 'py-0.5 px-0.5 text-[10px]'}`}>-</td>
-                      <td className={`border-r border-black text-center font-mono ${isUltraDensity ? 'py-0 px-0.5 text-[9px]' : 'py-0.5 px-0.5 text-[10px]'}`}>-</td>
-                    </>
-                  )}
-                  <td className={`border-r border-black text-center ${cellPadClass}`}>-</td>
-                  {showOvertimeCol && (
-                    <td className={`border-r border-black text-center ${cellPadClass}`}>-</td>
-                  )}
-                  {showGarageCols && (
-                    <>
-                      <td className={`border-r border-black text-center font-mono ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>-</td>
-                      <td className={`border-r border-black text-center font-mono ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>-</td>
-                    </>
-                  )}
-                  {showStartEndKm && (
-                    <>
-                      <td className={`border-r border-black text-center font-mono ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>-</td>
-                      <td className={`border-r border-black text-center font-mono ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>-</td>
-                    </>
-                  )}
-                  <td className={`border-r border-black font-bold text-center uppercase tracking-tight ${isUltraDensity ? 'py-0 px-1 text-[9px]' : 'py-0.5 px-1 text-[10px]'}`}>
-                    {extraChargesDescription || 'EXTRA CHARGES'}
-                  </td>
-                  <td className={`border-r border-black text-center ${cellPadClass}`}>-</td>
-                  <td className={`border-r border-black text-center ${cellPadClass}`}>-</td>
-                  {!hideTotalPrice && (
-                    <td className={`font-bold text-purple-950 ${cellPadClass}`}>
-                      ₹ {effectiveExtraCharges.toLocaleString('en-IN')}
-                    </td>
-                  )}
-                </tr>
-              )}
-
-              {visibleRows.length === 0 && effectiveExtraCharges === 0 && (
+              {visibleRows.length === 0 && (
                 <tr>
                   <td
                     colSpan={
@@ -504,7 +463,7 @@ export const BishalMonthlyInvoicePdfTemplate: React.FC<BishalMonthlyInvoicePdfTe
 
                 {showExtraDutyCol && (
                   <td className={`border-r border-black font-mono font-bold text-right ${isUltraDensity ? 'py-1 px-1 text-[9.5px]' : 'py-1.5 px-1 text-[10px]'}`}>
-                    {effectiveExtraDutyCharges + effectiveExtraCharges > 0 ? `₹ ${effectiveExtraDutyCharges + effectiveExtraCharges}` : '-'}
+                    {effectiveExtraDutyCharges > 0 ? `₹ ${effectiveExtraDutyCharges}` : '-'}
                   </td>
                 )}
 
